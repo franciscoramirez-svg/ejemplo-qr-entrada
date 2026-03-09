@@ -88,6 +88,49 @@ if os.path.exists(DB_FILE):
         st.info("Aún no hay registros el día de hoy.")
 else:
     st.info("El archivo de base de datos se creará con el primer registro.")
+    
+# --- PANEL DE ADMINISTRACIÓN ---
+st.divider()
+with st.expander("🔐 Panel de Administración de neomotic"):
+    password = st.text_input("Introduce la contraseña para ver los registros", type="password")
+    
+    # Define aquí tu contraseña
+    if password == "NEOMOTIC2026": 
+        st.subheader("📋 Registros de Hoy")
+
+        if os.path.exists(DB_FILE):
+            df = pd.read_csv(DB_FILE)
+            
+            # Convertir a datetime manejando el formato día/mes/año
+            df['Hora'] = pd.to_datetime(df['Hora'], dayfirst=True, errors='coerce')
+            
+            hoy = datetime.now(zona_veracruz).date()
+            df_hoy = df[df['Hora'].dt.date == hoy]
+            
+            if not df_hoy.empty:
+                # Botón para descargar el reporte en Excel/CSV
+                csv = df_hoy.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Descargar Reporte de Hoy",
+                    data=csv,
+                    file_name=f"asistencia_{hoy}.csv",
+                    mime="text/csv",
+                )
+                
+                # Tabla
+                st.dataframe(df_hoy.sort_values(by="Hora", ascending=False), use_container_width=True)
+                
+                # Mapa
+                st.subheader("🗺️ Mapa de registros")
+                map_data = df_hoy[['Lat', 'Lon']].rename(columns={'Lat': 'lat', 'Lon': 'lon'})
+                st.map(map_data)
+            else:
+                st.info("Aún no hay registros el día de hoy.")
+        else:
+            st.info("No existe archivo de base de datos todavía.")
+    elif password != "":
+        st.error("Contraseña incorrecta")
+
 
 
 
