@@ -1,6 +1,5 @@
-streamlit==1.31.0
+st-gsheets-connection
 pandas
-streamlit-gsheets
 streamlit-js-eval
 opencv-python-headless
 pytz
