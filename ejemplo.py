@@ -1,21 +1,21 @@
 import streamlit as st
 import pandas as pd
+from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 from streamlit_js_eval import get_geolocation
 import cv2
 import numpy as np
-import os
 from math import radians, cos, sin, asin, sqrt
 import pytz
 
-# Configuración de zona horaria
+# 1. Configuración de zona horaria y Conexión
 zona_veracruz = pytz.timezone('America/Mexico_City')
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 # --- CONFIGURACIÓN DE LA OFICINA ---
 OFICINA_LAT = 19.245304  
 OFICINA_LON = -96.174232 
 RADIO_PERMITIDO = 1000   
-DB_FILE = "asistencia_geocerca.csv"
 
 def calcular_distancia(lat1, lon1, lat2, lon2):
     lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
@@ -32,96 +32,64 @@ loc = get_geolocation()
 if loc:
     lat_actual = loc['coords']['latitude']
     lon_actual = loc['coords']['longitude']
-    
     distancia = calcular_distancia(lat_actual, lon_actual, OFICINA_LAT, OFICINA_LON)
     
     if distancia <= RADIO_PERMITIDO:
-        st.success(f"✅ Estás en la zona de trabajo ({int(distancia)}m de la oficina)")
-        
+        st.success(f"✅ Estás en la zona de trabajo ({int(distancia)}m)")
         foto = st.camera_input("Escanea tu QR para registrar entrada")
+        
         if foto:
             file_bytes = np.asarray(bytearray(foto.getvalue()), dtype=np.uint8)
             img = cv2.imdecode(file_bytes, 1)
             data, _, _ = cv2.QRCodeDetector().detectAndDecode(img)
 
             if data:
-                # Corregida la indentación aquí abajo
                 if st.button(f"Confirmar Registro para {data}"):
                     ahora_veracruz = datetime.now(zona_veracruz)
                     hora_formateada = ahora_veracruz.strftime("%d/%m/%Y %H:%M:%S")
 
+                    # LEER Y ACTUALIZAR GOOGLE SHEETS
+                    df_actual = conn.read(ttl=0)
                     nuevo = pd.DataFrame([[data, hora_formateada, lat_actual, lon_actual]], 
                                          columns=["Empleado", "Hora", "Lat", "Lon"])
                     
-                    nuevo.to_csv(DB_FILE, mode='a', header=not os.path.exists(DB_FILE), index=False)
-                    st.success(f"Registrado a las {hora_formateada}")
+                    df_final = pd.concat([df_actual, nuevo], ignore_index=True)
+                    conn.update(data=df_final)
+                    
+                    st.success(f"✅ Registrado en la nube: {hora_formateada}")
                     st.balloons()
             else:
                 st.error("QR no detectado.")
     else:
-        st.error(f"❌ Estás fuera de la zona. Distancia: {int(distancia)}m")
-        st.info("Debes estar a menos de 1000 metros de la oficina para registrarte.")
+        st.error(f"❌ Fuera de zona. Distancia: {int(distancia)}m")
 else:
     st.warning("Esperando señal GPS... Por favor, acepta los permisos.")
-    
-# --- SECCIÓN DE CONSULTA ---
-st.divider()
-st.subheader("📋 Registros de Hoy")
 
-if os.path.exists(DB_FILE):
-    df = pd.read_csv(DB_FILE)
-    
-    # Intentamos convertir la hora manejando posibles errores de formato
-    df['Hora'] = pd.to_datetime(df['Hora'], dayfirst=True, errors='coerce')
-    
-    hoy = datetime.now(zona_veracruz).date()
-    df_hoy = df[df['Hora'].dt.date == hoy]
-    
-    if not df_hoy.empty:
-        st.dataframe(df_hoy.sort_values(by="Hora", ascending=False), use_container_width=True)
-        
-        # --- MAPA ---
-        st.subheader("🗺️ Mapa de registros")
-        map_data = df_hoy[['Lat', 'Lon']].rename(columns={'Lat': 'lat', 'Lon': 'lon'})
-        st.map(map_data)
-    else:
-        st.info("Aún no hay registros el día de hoy.")
-else:
-    st.info("El archivo de base de datos se creará con el primer registro.")
-    
 # --- PANEL DE ADMINISTRACIÓN ---
 st.divider()
 with st.expander("🔐 Panel de Administración"):
     password = st.text_input("Contraseña", type="password")
     
     if password == "NEOMOTIC2024": 
-        if os.path.exists(DB_FILE):
-            df = pd.read_csv(DB_FILE)
-            
-            # Forzamos la conversión de la columna Hora
-            df['Hora'] = pd.to_datetime(df['Hora'], dayfirst=True, errors='coerce')
-            
-            # Eliminamos filas que no se pudieron convertir (NaT)
-            df = df.dropna(subset=['Hora'])
-            
-            # Obtener fecha de hoy en Veracruz
+        # Leer directamente de la nube
+        df_nube = conn.read(ttl=0)
+        
+        if not df_nube.empty:
+            df_nube['Hora'] = pd.to_datetime(df_nube['Hora'], dayfirst=True, errors='coerce')
             hoy = datetime.now(zona_veracruz).date()
+            df_hoy = df_nube[df_nube['Hora'].dt.date == hoy]
             
-            # Filtrado manual para asegurar coincidencia
-            df_hoy = df[df['Hora'].dt.date == hoy]
-            
+            st.subheader(f"📋 Registros de hoy ({hoy})")
             if not df_hoy.empty:
-                st.write(f"Mostrando {len(df_hoy)} registros de hoy ({hoy})")
-                st.dataframe(df_hoy.sort_values(by="Hora", ascending=False))
-                
+                st.dataframe(df_hoy.sort_values(by="Hora", ascending=False), use_container_width=True)
                 st.subheader("🗺️ Mapa")
                 st.map(df_hoy[['Lat', 'Lon']].rename(columns={'Lat': 'lat', 'Lon': 'lon'}))
             else:
-                st.warning("No hay registros que coincidan con la fecha de hoy.")
-                st.write("Registros totales en el archivo:", len(df))
-                st.dataframe(df.tail(5)) # Ver los últimos 5 registros aunque no sean de hoy
+                st.info("No hay registros hoy.")
         else:
-            st.error("Aún no se ha creado el archivo de base de datos.")
+            st.info("La base de datos está vacía.")
+
+
 
 
 
