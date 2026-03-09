@@ -1,0 +1,5 @@
+streamlit
+pandas
+streamlit-js-eval
+opencv-python-headless
+numpy
