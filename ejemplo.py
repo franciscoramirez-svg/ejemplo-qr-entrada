@@ -120,16 +120,14 @@ with st.expander("🔐 Panel de Administración de neomotic"):
                 # Tabla
                 st.dataframe(df_hoy.sort_values(by="Hora", ascending=False), use_container_width=True)
                 
-                # Mapa
-                st.subheader("🗺️ Mapa de registros")
-                map_data = df_hoy[['Lat', 'Lon']].rename(columns={'Lat': 'lat', 'Lon': 'lon'})
-                st.map(map_data)
+                
             else:
                 st.info("Aún no hay registros el día de hoy.")
         else:
             st.info("No existe archivo de base de datos todavía.")
     elif password != "":
         st.error("Contraseña incorrecta")
+
 
 
 
