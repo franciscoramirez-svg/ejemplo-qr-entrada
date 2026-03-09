@@ -1,2 +1,0 @@
-# ejemplo-qr-entrada
-ejemplo
