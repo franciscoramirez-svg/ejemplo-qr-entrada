@@ -3,3 +3,4 @@ pandas
 streamlit-js-eval
 opencv-python-headless
 numpy
+streamlit-gsheets
