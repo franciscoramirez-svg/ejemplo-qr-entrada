@@ -57,3 +57,25 @@ if loc:
         st.info("Debes estar a menos de 100 metros de la oficina para registrarte.")
 else:
     st.warning("Esperando señal GPS... Por favor, acepta los permisos.")
+    
+# --- SECCIÓN DE CONSULTA ---
+st.divider()
+st.subheader("📋 Registros de Hoy")
+
+if os.path.exists(DB_FILE):
+    df = pd.read_csv(DB_FILE)
+    
+    # Convertir columna Hora a formato fecha para filtrar
+    df['Hora'] = pd.to_datetime(df['Hora'])
+    
+    # Filtrar solo los de hoy
+    hoy = datetime.now().date()
+    df_hoy = df[df['Hora'].dt.date == hoy]
+    
+    if not df_hoy.empty:
+        # Mostrar tabla limpia
+        st.dataframe(df_hoy.sort_values(by="Hora", ascending=False), use_container_width=True)
+    else:
+        st.info("Aún no hay registros el día de hoy.")
+else:
+    st.info("El archivo de base de datos se creará con el primer registro.")
