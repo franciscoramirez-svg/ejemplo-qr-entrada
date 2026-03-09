@@ -91,42 +91,37 @@ else:
     
 # --- PANEL DE ADMINISTRACIÓN ---
 st.divider()
-with st.expander("🔐 Panel de Administración de neomotic"):
-    password = st.text_input("Introduce la contraseña para ver los registros", type="password")
+with st.expander("🔐 Panel de Administración"):
+    password = st.text_input("Contraseña", type="password")
     
-    # Define aquí tu contraseña
-    if password == "NEOMOTIC2026": 
-        st.subheader("📋 Registros de Hoy")
-
+    if password == "NEOMOTIC2024": 
         if os.path.exists(DB_FILE):
             df = pd.read_csv(DB_FILE)
             
-            # Convertir a datetime manejando el formato día/mes/año
+            # Forzamos la conversión de la columna Hora
             df['Hora'] = pd.to_datetime(df['Hora'], dayfirst=True, errors='coerce')
             
+            # Eliminamos filas que no se pudieron convertir (NaT)
+            df = df.dropna(subset=['Hora'])
+            
+            # Obtener fecha de hoy en Veracruz
             hoy = datetime.now(zona_veracruz).date()
+            
+            # Filtrado manual para asegurar coincidencia
             df_hoy = df[df['Hora'].dt.date == hoy]
             
             if not df_hoy.empty:
-                # Botón para descargar el reporte en Excel/CSV
-                csv = df_hoy.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="📥 Descargar Reporte de Hoy",
-                    data=csv,
-                    file_name=f"asistencia_{hoy}.csv",
-                    mime="text/csv",
-                )
+                st.write(f"Mostrando {len(df_hoy)} registros de hoy ({hoy})")
+                st.dataframe(df_hoy.sort_values(by="Hora", ascending=False))
                 
-                # Tabla
-                st.dataframe(df_hoy.sort_values(by="Hora", ascending=False), use_container_width=True)
-                
-                
+                st.subheader("🗺️ Mapa")
+                st.map(df_hoy[['Lat', 'Lon']].rename(columns={'Lat': 'lat', 'Lon': 'lon'}))
             else:
-                st.info("Aún no hay registros el día de hoy.")
+                st.warning("No hay registros que coincidan con la fecha de hoy.")
+                st.write("Registros totales en el archivo:", len(df))
+                st.dataframe(df.tail(5)) # Ver los últimos 5 registros aunque no sean de hoy
         else:
-            st.info("No existe archivo de base de datos todavía.")
-    elif password != "":
-        st.error("Contraseña incorrecta")
+            st.error("Aún no se ha creado el archivo de base de datos.")
 
 
 
