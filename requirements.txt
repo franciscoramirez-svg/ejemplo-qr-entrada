@@ -1,5 +1,6 @@
 streamlit
 pandas
 streamlit-gsheets
+streamlit-js-eval
 opencv-python-headless
 pytz
