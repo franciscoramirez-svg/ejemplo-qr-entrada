@@ -54,7 +54,7 @@ def enviar_reporte_semanal(df):
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(REMITENTE, PASSWORD_APP)
-        server.send_message(msg)
+        server.sendmail(REMITENTE, DESTINATARIOS, msg.as_string())
         server.quit()
         
         return True # Ahora sí devolverá True al finalizar con éxito
@@ -197,6 +197,7 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
 
