@@ -70,7 +70,7 @@ def enviar_reporte_semanal(df):
 
         msg = MIMEMultipart("alternative")
         msg['From'], msg['To'] = REMITENTE, ", ".join(DESTINATARIOS)
-        msg['Subject'] = f"💰 NOMINA NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
+        msg['Subject'] = f"💰 LISTA DE ASISTENCIA SEMANAL TRV - {hoy.strftime('%d/%m/%Y')}"
 
         html_cuerpo = f"""
         <div style="font-family: Arial; max-width: 600px; border: 1px solid #004a99; padding: 20px;">
@@ -238,6 +238,7 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
 
