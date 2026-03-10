@@ -29,70 +29,49 @@ from email.mime.image import MIMEImage
 
 def enviar_reporte_semanal(df):
     try:
+        # 1. Configuración rápida
         PASSWORD_APP = st.secrets["EMAIL_PASSWORD"]
         REMITENTE = st.secrets["EMAIL_USER"]
         DESTINATARIOS = ["francisco.ramirez@neomotic.com", "rodolfo.fuentes@neomotic.com"]
         
+        # 2. Filtro de 7 días veloz
         hoy = datetime.now(zona_veracruz)
         fecha_inicio = (hoy - timedelta(days=7)).date()
         
-        # --- Filtrado de datos ---
         df_temp = df.copy()
         df_temp['Hora_dt'] = pd.to_datetime(df_temp['Hora'], dayfirst=True, errors='coerce')
         df_filtrado = df_temp[df_temp['Hora_dt'].dt.date >= fecha_inicio].copy()
         
-        if df_filtrado.empty: return "Sin registros recientes."
+        if df_filtrado.empty:
+            return "No hay registros en la última semana."
 
+        # 3. Resumen en Tabla HTML (Formato estándar de email)
         resumen = df_filtrado.groupby(['Empleado', 'Tipo']).size().unstack(fill_value=0)
-        resumen_html = resumen.to_html(border=0, classes='tabla_resumen', justify='center')
+        resumen_html = resumen.to_html(border=1, justify='center', index=True)
 
-        # --- Construcción del correo ---
-        msg = MIMEMultipart("related") # Cambiado a 'related' para imágenes incrustadas
+        # 4. Estructura del Correo (Ligero y rápido)
+        msg = MIMEMultipart("alternative")
         msg['From'] = REMITENTE
         msg['To'] = ", ".join(DESTINATARIOS)
-        msg['Subject'] = f"📊 Reporte de Asistencia - {hoy.strftime('%d/%m/%Y')}"
+        msg['Subject'] = f"📊 Reporte Asistencia NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
 
-        # Usamos 'cid:logo_neomotic' para referenciar la imagen interna
+        # Logo directo de la web para no retrasar el envío
         html_cuerpo = f"""
-        <html>
-        <head>
-            <style>
-                .tabla_resumen {{ width: 100%; border-collapse: collapse; margin: 20px 0; font-family: sans-serif; }}
-                .tabla_resumen th {{ background-color: #004a99; color: white; padding: 10px; }}
-                .tabla_resumen td {{ border: 1px solid #ddd; padding: 8px; text-align: center; }}
-            </style>
-        </head>
-        <body style="margin:0; padding:20px; background-color:#f4f4f4;">
-            <div style="max-width: 600px; margin: auto; background:#fff; border-radius:8px; overflow:hidden; border:1px solid #ddd;">
-                <div style="padding: 20px; text-align: center;">
-                    <img src="cid:logo_neomotic" width="200" alt="NEOMOTIC">
-                </div>
-                <div style="padding: 30px; border-top: 4px solid #004a99;">
-                    <h2 style="color:#004a99;">Reporte de Asistencia Semanal</h2>
-                    <p>Periodo: <b>{fecha_inicio.strftime('%d/%m/%Y')}</b> al <b>{hoy.strftime('%d/%m/%Y')}</b></p>
-                    {resumen_html}
-                    <p style="font-size:12px; color:#888;">* Detalle completo en el archivo adjunto.</p>
-                </div>
+        <div style="font-family: sans-serif; max-width: 500px; border: 1px solid #ddd; padding: 20px; border-radius: 10px;">
+            <div style="text-align: center;">
+                <img src="https://www.neomotic.com" width="180" alt="NEOMOTIC">
             </div>
-        </body>
-        </html>
+            <h2 style="color: #004a99; text-align: center; border-bottom: 2px solid #004a99; padding-bottom: 10px;">Control de Asistencia TRV</h2>
+            <p>Reporte semanal: <b>{fecha_inicio.strftime('%d/%m/%Y')}</b> al <b>{hoy.strftime('%d/%m/%Y')}</b></p>
+            <div style="margin: 20px 0;">
+                {resumen_html}
+            </div>
+            <p style="font-size: 11px; color: #777;">* El detalle completo se adjunta en el archivo CSV.</p>
+        </div>
         """
-        
-        msg_html = MIMEText(html_cuerpo, "html")
-        msg.attach(msg_html)
+        msg.attach(MIMEText(html_cuerpo, 'html'))
 
-        # --- INCORPORAR LOGO COMO CID ---
-        try:
-            url_logo = "https://www.neomotic.com"
-            response = requests.get(url_logo)
-            img_data = response.content
-            img = MIMEImage(img_data)
-            img.add_header('Content-ID', '<logo_neomotic>') # El ID que usamos en el HTML
-            msg.attach(img)
-        except:
-            pass # Si falla el logo, el correo se envía igual sin imagen
-
-        # --- ADJUNTAR CSV ---
+        # 5. Adjunto CSV filtrado
         csv_binario = df_filtrado.drop(columns=['Hora_dt']).to_csv(index=False).encode('utf-8')
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(csv_binario)
@@ -100,7 +79,7 @@ def enviar_reporte_semanal(df):
         part.add_header('Content-Disposition', 'attachment; filename="Reporte_Asistencia_TRV.csv"')
         msg.attach(part)
 
-        # --- ENVÍO ---
+        # 6. Conexión y envío inmediato
         with smtplib.SMTP('smtp.gmail.com', 587) as server:
             server.starttls()
             server.login(REMITENTE, PASSWORD_APP)
@@ -109,8 +88,7 @@ def enviar_reporte_semanal(df):
         return True 
 
     except Exception as e:
-        return f"Error: {str(e)}"
-
+        return f"Error en envío rápido: {str(e)}"
 
 
 def calcular_distancia(lat1, lon1, lat2, lon2):
@@ -248,6 +226,7 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
 
