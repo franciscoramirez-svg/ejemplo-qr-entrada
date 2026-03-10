@@ -57,7 +57,7 @@ def enviar_reporte_semanal(df):
 def calcular_distancia(lat1, lon1, lat2, lon2):
     lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
     dlon = lon2 - lon1
-    dlat = dlat = lat2 - lat1
+    dlat = lat2 - lat1
     a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
     c = 2 * asin(sqrt(a))
     return c * 6371000 
@@ -133,35 +133,23 @@ if loc:
                 with col2:
                     st.button("📤 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True)
                 
-                # --- BOTÓN DE WHATSAPP: SOLUCIÓN FINAL (HTML DIRECTO) ---
+                # --- BLOQUE DE WHATSAPP REFORZADO ---
                 if st.session_state.ultimo_registro:
                     reg = st.session_state.ultimo_registro
                     resumen_texto = f"Registro Neomotic: {reg['empleado']} - {reg['tipo'].upper()} - {reg['hora']}"
                     texto_url = urllib.parse.quote(resumen_texto)
                     
-                    # URL wa.me corregida con el slash y signo de interrogación adecuado
-                    url_wa = f"https://wa.me{TELEFONO_ADMIN_WA}?text={texto_url}"
+                    # Protocolos diferenciados para evitar bloqueo del navegador
+                    url_directa = f"whatsapp://send?phone={TELEFONO_ADMIN_WA}&text={texto_url}"
+                    url_web = f"https://web.whatsapp.com{TELEFONO_ADMIN_WA}&text={texto_url}"
                     
-                    st.markdown("---")
-                    # Botón diseñado con HTML para evitar bloqueos de pop-up
-                    st.markdown(f"""
-                        <a href="{url_wa}" target="_blank" style="text-decoration: none;">
-                            <div style="
-                                background-color: #25D366;
-                                color: white;
-                                padding: 12px 24px;
-                                text-align: center;
-                                border-radius: 8px;
-                                font-weight: bold;
-                                font-size: 16px;
-                                border: none;
-                                display: block;
-                                cursor: pointer;
-                            ">
-                                📲 CONFIRMAR POR WHATSAPP
-                            </div>
-                        </a>
-                    """, unsafe_allow_html=True)
+                    st.divider()
+                    st.info("Selecciona el método de confirmación:")
+                    c_wa1, c_wa2 = st.columns(2)
+                    with c_wa1:
+                        st.link_button("📱 En Celular (App)", url_directa, use_container_width=True)
+                    with c_wa2:
+                        st.link_button("💻 En Computadora", url_web, use_container_width=True)
 
             else:
                 st.error("QR no legible.")
