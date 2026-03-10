@@ -25,7 +25,7 @@ TELEFONO_ADMIN_WA = "5212296936270"
 def enviar_reporte_semanal(df):
     try:
         PASSWORD_APP = st.secrets["EMAIL_PASSWORD"]
-        EMAIL_SENDER = st.secrets["EMAIL_USER"]
+        REMITENTE = st.secrets["EMAIL_USER"]
         DESTINATARIO = "francisco.ramirez@neomotic.com"
         
     except KeyError:
@@ -196,6 +196,7 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
 
