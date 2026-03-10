@@ -10,7 +10,10 @@ import pytz
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
 import urllib.parse  # Necesario para WhatsApp
+
 
 # --- 1. CONFIGURACIÓN INICIAL ---
 zona_veracruz = pytz.timezone('America/Mexico_City')
@@ -45,11 +48,20 @@ def enviar_reporte_semanal(df):
         
         msg = MIMEMultipart()
         msg['From'] = REMITENTE
-        msg['To'] = "francisco.ramirez@neomotic.com, rodolfo.fuentes@neomotic.com".join(DESTINATARIOS)
+        msg['To'] = "francisco.ramirez@neomotic.com, rodolfo.fuentes@neomotic.com" .join(DESTINATARIOS)
         msg['Subject'] = f"📊 Reporte de Asistencia NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
         
         cuerpo = f"Hola,\n\nSe adjunta el resumen de asistencias solicitado:\n\n{resumen.to_string()}\n\nGenerado por Sistema NEOMOTIC."
         msg.attach(MIMEText(cuerpo, 'plain'))
+        
+        # --- CAMBIO CLAVE: CREAR EL ARCHIVO ADJUNTO ---
+        csv_binario = df.to_csv(index=False).encode('utf-8')
+        part = MIMEBase('application', 'octet-stream')
+        part.set_payload(csv_binario)
+        encoders.encode_base64(part)
+        part.add_header('Content-Disposition', f'attachment; filename="Reporte_{hoy.strftime("%Y%m%d")}.csv"')
+        msg.attach(part) # Se "pega" el archivo al correo
+        # ---------------------------------------------
 
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
@@ -197,6 +209,7 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
 
