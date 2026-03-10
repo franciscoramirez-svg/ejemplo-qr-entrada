@@ -32,54 +32,70 @@ from email.mime.image import MIMEImage
 
 #--------------------------------------------
 
+import requests
+from email.mime.image import MIMEImage
+
 def enviar_reporte_semanal(df):
     try:
+        # 1. Configuración de Credenciales
         PASSWORD_APP = st.secrets["EMAIL_PASSWORD"]
         REMITENTE = st.secrets["EMAIL_USER"]
         DESTINATARIOS = ["francisco.ramirez@neomotic.com", "rodolfo.fuentes@neomotic.com"]
         
+        # 2. Filtro de los últimos 7 días
         hoy = datetime.now(zona_veracruz)
         fecha_inicio = (hoy - timedelta(days=7)).date()
         
-        # Filtro de datos
         df_temp = df.copy()
         df_temp['Hora_dt'] = pd.to_datetime(df_temp['Hora'], dayfirst=True, errors='coerce')
         df_filtrado = df_temp[df_temp['Hora_dt'].dt.date >= fecha_inicio].copy()
-        if df_filtrado.empty: return "Sin registros recientes."
+        
+        if df_filtrado.empty:
+            return "No hay registros recientes para enviar."
 
+        # 3. Resumen en Tabla HTML
         resumen = df_filtrado.groupby(['Empleado', 'Tipo']).size().unstack(fill_value=0)
         resumen_html = resumen.to_html(border=1, justify='center')
 
-        # Usamos 'related' para que el logo viva DENTRO del correo
+        # 4. Construcción del Correo con Imagen Incrustada (Related)
         msg = MIMEMultipart("related")
         msg['From'] = REMITENTE
         msg['To'] = ", ".join(DESTINATARIOS)
-        msg['Subject'] = f"📊 Reporte NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
+        msg['Subject'] = f"📊 Reporte Semanal NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
 
-        # El truco está en src="cid:logo_neomotic"
+        # Usamos cid:logo_neomotic para llamar a la imagen interna
         html_cuerpo = f"""
-        <div style="font-family: Arial; max-width: 500px; border: 1px solid #ddd; padding: 20px; border-radius: 10px;">
-            <div style="text-align: center; margin-bottom: 15px;">
-                <img src="cid:logo_neomotic" width="180">
+        <html>
+        <body style="font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px;">
+            <div style="max-width: 500px; margin: auto; background-color: #ffffff; border: 1px solid #ddd; border-radius: 10px; overflow: hidden; padding: 20px;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <img src="cid:logo_neomotic" width="200">
+                </div>
+                <h2 style="color: #004a99; text-align: center; border-bottom: 2px solid #004a99; padding-bottom: 10px;">Reporte de Asistencia TRV</h2>
+                <p>Periodo: <b>{fecha_inicio.strftime('%d/%m/%Y')}</b> al <b>{hoy.strftime('%d/%m/%Y')}</b></p>
+                <div style="margin: 20px 0;">
+                    {resumen_html}
+                </div>
+                <p style="font-size: 11px; color: #777; border-top: 1px solid #eee; pt-10px;">
+                    * El detalle completo se adjunta en el archivo CSV.
+                </p>
             </div>
-            <h2 style="color: #004a99; text-align: center;">Control de Asistencia TRV</h2>
-            <p>Reporte del <b>{fecha_inicio.strftime('%d/%m/%Y')}</b> al <b>{hoy.strftime('%d/%m/%Y')}</b></p>
-            {resumen_html}
-            <p style="color: #888; font-size: 11px; margin-top: 20px;">* Detalle adjunto en CSV.</p>
-        </div>
+        </body>
+        </html>
         """
         msg.attach(MIMEText(html_cuerpo, 'html'))
 
-        # --- AQUÍ INCRUSTAMOS EL LOGO REAL ---
+        # --- 5. EL TRUCO DEL LOGO: Descargar e Incrustar ---
         try:
             url_logo = "https://www.neomotic.com"
             img_data = requests.get(url_logo).content
             img = MIMEImage(img_data)
             img.add_header('Content-ID', '<logo_neomotic>')
             msg.attach(img)
-        except: pass
+        except Exception:
+            pass # Si falla el logo, el correo se envía solo con texto
 
-        # Adjunto CSV
+        # 6. Adjuntar el Archivo CSV
         csv_binario = df_filtrado.drop(columns=['Hora_dt']).to_csv(index=False).encode('utf-8')
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(csv_binario)
@@ -87,14 +103,16 @@ def enviar_reporte_semanal(df):
         part.add_header('Content-Disposition', 'attachment; filename="Reporte_Asistencia_TRV.csv"')
         msg.attach(part)
 
+        # 7. Envío Final
         with smtplib.SMTP('smtp.gmail.com', 587) as server:
             server.starttls()
             server.login(REMITENTE, PASSWORD_APP)
             server.sendmail(REMITENTE, DESTINATARIOS, msg.as_string())
             
         return True 
+
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error en reporte: {str(e)}"
 
 # --------------------
 
@@ -233,6 +251,7 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
 
