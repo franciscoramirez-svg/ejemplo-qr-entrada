@@ -26,7 +26,7 @@ TELEFONO_ADMIN_WA = "5212296936270"
 
 def enviar_reporte_semanal(df):
     try:
-        # 1. Validación inicial de secretos
+        # 1. Validación de secretos
         try:
             PASSWORD_APP = st.secrets["EMAIL_PASSWORD"]
             REMITENTE = st.secrets["EMAIL_USER"]
@@ -34,68 +34,68 @@ def enviar_reporte_semanal(df):
         except KeyError:
             return "¡Faltan los secretos en la configuración!"
 
-        # 2. Configuración de fechas y FILTRO (Últimos 7 días)
+        # 2. Filtro de los últimos 7 días
         hoy = datetime.now(zona_veracruz)
-        hace_7_dias = hoy - timedelta(days=7)
+        fecha_inicio = (hoy - timedelta(days=7)).date()
         
         df_temp = df.copy()
         df_temp['Hora_dt'] = pd.to_datetime(df_temp['Hora'], dayfirst=True, errors='coerce')
-        df_filtrado = df_temp[df_temp['Hora_dt'].dt.date >= hace_7_dias.date()].copy()
+        df_filtrado = df_temp[df_temp['Hora_dt'].dt.date >= fecha_inicio].copy()
         
         if df_filtrado.empty:
-            return "No hay registros en los últimos 7 días para enviar."
+            return "No hay registros recientes para enviar."
 
-        # 3. Generar Resumen en formato Tabla HTML
+        # 3. Preparar tabla de resumen en HTML
         resumen = df_filtrado.groupby(['Empleado', 'Tipo']).size().unstack(fill_value=0)
-        resumen_html = resumen.to_html(border=1, justify='center', classes='table')
+        resumen_html = resumen.to_html(border=0, classes='tabla_resumen', justify='center')
 
-        # 4. Configuración del Mensaje (HTML)
+        # 4. Construcción del correo HTML
         msg = MIMEMultipart("alternative")
         msg['From'] = REMITENTE
         msg['To'] = ", ".join(DESTINATARIOS)
-        msg['Subject'] = f"📊 Reporte de Asistencia NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
-        
-        # Diseño profesional con Logo
+        msg['Subject'] = f"📊 Reporte Semanal NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
+
         html_cuerpo = f"""
         <html>
-        <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; line-height: 1.6;">
-            <div style="max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
-                <div style="background-color: #ffffff; padding: 20px; text-align: center; border-bottom: 3px solid #004a99;">
-                    <img src="https://www.neomotic.com" alt="NEOMOTIC Logo" style="width: 180px;">
+        <head>
+            <style>
+                .tabla_resumen {{ width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; }}
+                .tabla_resumen th {{ background-color: #004a99; color: white; padding: 10px; }}
+                .tabla_resumen td {{ border: 1px solid #ddd; padding: 8px; text-align: center; }}
+            </style>
+        </head>
+        <body style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 20px;">
+            <div style="max-width: 600px; margin: auto; background-color: #ffffff; border: 1px solid #eee; border-radius: 10px; overflow: hidden;">
+                <div style="padding: 20px; text-align: center; background-color: #ffffff;">
+                    <img src="https://www.neomotic.com" width="200" alt="NEOMOTIC">
                 </div>
-                <div style="padding: 30px;">
-                    <h2 style="color: #004a99; margin-top: 0;">Reporte Semanal de Asistencia</h2>
-                    <p>Hola Francisco y Rodolfo,</p>
-                    <p>Se adjunta el resumen de asistencias de los últimos 7 días (<b>{hace_7_dias.strftime('%d/%m/%Y')}</b> al <b>{hoy.strftime('%d/%m/%Y')}</b>):</p>
+                <div style="padding: 30px; border-top: 4px solid #004a99;">
+                    <h2 style="color: #004a99;">Reporte de Asistencia</h2>
+                    <p>Estimados Francisco y Rodolfo,</p>
+                    <p>Se adjunta el reporte detallado del periodo <b>{fecha_inicio.strftime('%d/%m/%Y')}</b> al <b>{hoy.strftime('%d/%m/%Y')}</b>.</p>
                     
-                    <div style="margin: 25px 0;">
-                        {resumen_html}
-                    </div>
+                    <h3>Conteo de la Semana:</h3>
+                    {resumen_html}
                     
-                    <p style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #004a99; font-style: italic;">
-                        El detalle completo de cada registro se encuentra en el archivo <b>.csv</b> adjunto a este correo.
+                    <p style="font-size: 12px; color: #888; margin-top: 30px;">
+                        <i>* El registro completo se encuentra en el archivo CSV adjunto.</i>
                     </p>
-                </div>
-                <div style="background-color: #f4f4f4; padding: 15px; text-align: center; font-size: 12px; color: #777;">
-                    © {hoy.year} NEOMOTIC TRV | Sistema Automático de Gestión
                 </div>
             </div>
         </body>
         </html>
         """
         msg.attach(MIMEText(html_cuerpo, 'html'))
-        
-        # 5. ADJUNTAR ARCHIVO CSV
+
+        # 5. Adjuntar el CSV
         csv_binario = df_filtrado.drop(columns=['Hora_dt']).to_csv(index=False).encode('utf-8')
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(csv_binario)
         encoders.encode_base64(part)
-        
-        nombre_archivo = "Reporte_Asistencia_TRV.csv"
-        part.add_header('Content-Disposition', f'attachment; filename={nombre_archivo}')
+        part.add_header('Content-Disposition', f'attachment; filename="Reporte_Asistencia_TRV.csv"')
         msg.attach(part)
 
-        # 6. Envío Final
+        # 6. Envío SMTP
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(REMITENTE, PASSWORD_APP)
@@ -105,7 +105,8 @@ def enviar_reporte_semanal(df):
         return True 
 
     except Exception as e:
-        return f"Error inesperado: {str(e)}"
+        return f"Error en reporte visual: {str(e)}"
+
 
 def calcular_distancia(lat1, lon1, lat2, lon2):
     lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
@@ -242,6 +243,7 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
 
