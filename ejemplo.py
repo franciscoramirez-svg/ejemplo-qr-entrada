@@ -27,15 +27,12 @@ TELEFONO_ADMIN_WA = "5212296936270"
 
 
 #--------------------------------------------
-
 def enviar_reporte_semanal(df):
     try:
-        # 1. Configuración de Credenciales
         PASSWORD_APP = st.secrets["EMAIL_PASSWORD"]
         REMITENTE = st.secrets["EMAIL_USER"]
         DESTINATARIOS = ["francisco.ramirez@neomotic.com", "rodolfo.fuentes@neomotic.com"]
         
-        # 2. Filtro veloz de 7 días
         hoy = datetime.now(zona_veracruz)
         fecha_inicio = (hoy - timedelta(days=7)).date()
         
@@ -43,42 +40,56 @@ def enviar_reporte_semanal(df):
         df_temp['Hora_dt'] = pd.to_datetime(df_temp['Hora'], dayfirst=True, errors='coerce')
         df_filtrado = df_temp[df_temp['Hora_dt'].dt.date >= fecha_inicio].copy()
         
-        if df_filtrado.empty:
-            return "No hay registros recientes para enviar."
+        if df_filtrado.empty: return "Sin registros."
 
-        # 3. Tabla de Resumen (HTML simple)
+        # --- LOGICA DE NÓMINA: CALCULAR HORAS POR DÍA ---
+        df_filtrado['Fecha'] = df_filtrado['Hora_dt'].dt.date
+        
+        # Agrupamos por Empleado y Fecha para hallar Entrada (mín) y Salida (máx)
+        nomina = df_filtrado.groupby(['Empleado', 'Fecha']).agg(
+            Entrada=('Hora_dt', 'min'),
+            Salida=('Hora_dt', 'max')
+        ).reset_index()
+
+        # Calculamos la diferencia en horas
+        def calcular_horas(row):
+            if row['Entrada'] != row['Salida']:
+                diff = row['Salida'] - row['Entrada']
+                return round(diff.total_seconds() / 3600, 2)
+            return 0.0
+
+        nomina['Total_Horas_Dia'] = nomina.apply(calcular_horas, axis=1)
+        
+        # Formateamos las horas para que se vean bien en Excel (HH:MM:SS)
+        nomina['Entrada'] = nomina['Entrada'].dt.strftime('%H:%M:%S')
+        nomina['Salida'] = nomina['Salida'].dt.strftime('%H:%M:%S')
+
+        # --- PREPARAR CORREO ---
         resumen = df_filtrado.groupby(['Empleado', 'Tipo']).size().unstack(fill_value=0)
-        resumen_html = resumen.to_html(border=1, justify='center')
+        resumen_html = resumen.to_html(border=1)
 
-        # 4. Cuerpo del Correo (Sin imágenes para máxima velocidad)
         msg = MIMEMultipart("alternative")
-        msg['From'] = REMITENTE
-        msg['To'] = ", ".join(DESTINATARIOS)
-        msg['Subject'] = f"📊 Reporte Asistencia NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
+        msg['From'], msg['To'] = REMITENTE, ", ".join(DESTINATARIOS)
+        msg['Subject'] = f"💰 NOMINA NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
 
         html_cuerpo = f"""
-        <div style="font-family: Arial, sans-serif; max-width: 600px; padding: 20px; border: 1px solid #004a99; border-radius: 5px;">
-            <h2 style="color: #004a99; text-align: center;">NEOMOTIC TRV - Control de Asistencia</h2>
-            <p>Reporte semanal del <b>{fecha_inicio.strftime('%d/%m/%Y')}</b> al <b>{hoy.strftime('%d/%m/%Y')}</b>.</p>
-            <hr>
-            <div style="margin: 20px 0;">
-                {resumen_html}
-            </div>
-            <p style="font-size: 12px; color: #666;">* El detalle completo de los registros se encuentra en el archivo CSV adjunto.</p>
-            <p style="text-align: center; color: #004a99; font-weight: bold;">NEOMOTIC 2024</p>
+        <div style="font-family: Arial; max-width: 600px; border: 1px solid #004a99; padding: 20px;">
+            <h2 style="color: #004a99;">Reporte de Horas para Nómina</h2>
+            <p>Periodo: {fecha_inicio.strftime('%d/%m/%Y')} al {hoy.strftime('%d/%m/%Y')}</p>
+            {resumen_html}
+            <p><b>Nota:</b> El archivo adjunto contiene el cálculo de horas diarias por empleado.</p>
         </div>
         """
         msg.attach(MIMEText(html_cuerpo, 'html'))
 
-        # 5. Adjuntar el Archivo CSV filtrado
-        csv_binario = df_filtrado.drop(columns=['Hora_dt']).to_csv(index=False).encode('utf-8')
+        # ADJUNTO: Reporte de Nómina con Horas
+        csv_binario = nomina.to_csv(index=False).encode('utf-8')
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(csv_binario)
         encoders.encode_base64(part)
-        part.add_header('Content-Disposition', 'attachment; filename="Reporte_Asistencia_TRV.csv"')
+        part.add_header('Content-Disposition', 'attachment; filename="Nomina_Asistencia_TRV.csv"')
         msg.attach(part)
 
-        # 6. Envío SMTP Directo
         with smtplib.SMTP('smtp.gmail.com', 587) as server:
             server.starttls()
             server.login(REMITENTE, PASSWORD_APP)
@@ -87,7 +98,7 @@ def enviar_reporte_semanal(df):
         return True 
 
     except Exception as e:
-        return f"Error en envío: {str(e)}"
+        return f"Error en nómina: {str(e)}"
 
 
 # --------------------
@@ -227,6 +238,7 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
 
