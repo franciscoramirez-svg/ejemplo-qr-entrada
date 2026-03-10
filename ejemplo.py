@@ -10,6 +10,7 @@ import pytz
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+import urllib.parse  # Necesario para WhatsApp
 
 # --- 1. CONFIGURACIÓN INICIAL ---
 zona_veracruz = pytz.timezone('America/Mexico_City')
@@ -18,10 +19,10 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 OFICINA_LAT = 19.245304  
 OFICINA_LON = -96.174232 
 RADIO_PERMITIDO = 1000   
+TELEFONO_ADMIN_WA = "521229XXXXXXX" # <--- Cambia por tu número real
 
 # --- FUNCIÓN: ENVIAR REPORTE POR EMAIL ---
 def enviar_reporte_semanal(df):
-    # Configuración - REEMPLAZAR ESTOS DATOS
     REMITENTE = st.secrets["EMAIL_USER"]
     DESTINATARIO = "francisco.ramirez@neomotic.com"
     PASSWORD_APP = st.secrets["EMAIL_PASS"]
@@ -29,26 +30,21 @@ def enviar_reporte_semanal(df):
     try:
         hoy = datetime.now(zona_veracruz)
         hace_7_dias = hoy - timedelta(days=7)
-        
-        # Filtrar datos de la última semana
         df['Hora_dt'] = pd.to_datetime(df['Hora'], dayfirst=True, errors='coerce')
         df_semana = df[df['Hora_dt'] >= hace_7_dias].copy()
         
         if df_semana.empty:
             return "No hay datos para enviar esta semana."
 
-        # Crear un resumen simple para el cuerpo del correo
         resumen = df_semana.groupby(['Empleado', 'Tipo']).size().unstack(fill_value=0)
-        
         msg = MIMEMultipart()
         msg['From'] = REMITENTE
         msg['To'] = DESTINATARIO
         msg['Subject'] = f"📊 Reporte Semanal NEOMOTIC ({hace_7_dias.strftime('%d/%m')} al {hoy.strftime('%d/%m')})"
         
-        cuerpo = f"Hola,\n\nEste es el resumen de asistencias de la última semana:\n\n{resumen.to_string()}\n\nGenerado automáticamente por el Sistema NEOMOTIC."
+        cuerpo = f"Hola,\n\nResumen de asistencias:\n\n{resumen.to_string()}\n\nGenerado por Sistema NEOMOTIC."
         msg.attach(MIMEText(cuerpo, 'plain'))
 
-        # Conexión al servidor
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(REMITENTE, PASSWORD_APP)
@@ -68,9 +64,9 @@ def calcular_distancia(lat1, lon1, lat2, lon2):
 
 st.set_page_config(page_title="NEOMOTIC Access", page_icon="📍")
 
-# --- 2. LOGICA DE REPORTE JUEVES (BARRA LATERAL) ---
+# --- 2. LOGICA DE REPORTE JUEVES ---
 ahora = datetime.now(zona_veracruz)
-if ahora.strftime('%A') == 'Thursday': # Aparece solo los jueves
+if ahora.strftime('%A') == 'Thursday':
     with st.sidebar:
         st.warning("📅 ¡Hoy es jueves de reporte!")
         if st.button("📧 Enviar Reporte Semanal al Jefe"):
@@ -86,6 +82,8 @@ st.title("📍 Registro de Asistencia Pro")
 # --- 3. GESTIÓN DE ESTADO Y REGISTRO ---
 if 'procesando' not in st.session_state:
     st.session_state.procesando = False
+if 'ultimo_registro' not in st.session_state:
+    st.session_state.ultimo_registro = None
 
 loc = get_geolocation()
 
@@ -124,6 +122,7 @@ if loc:
                                              columns=["Empleado", "Hora", "Lat", "Lon", "Tipo"])
                         df_final = pd.concat([df_actual, nuevo], ignore_index=True)
                         conn.update(data=df_final)
+                        st.session_state.ultimo_registro = {"empleado": data, "tipo": tipo, "hora": hora_str}
                         st.toast(f"¡{tipo} registrada!", icon="🚀")
                         if tipo == "Entrada": st.balloons() 
                         else: st.snow()
@@ -133,6 +132,21 @@ if loc:
                     st.button("📥 ENTRADA", on_click=registrar, args=("Entrada",), use_container_width=True)
                 with col2:
                     st.button("📤 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True)
+                
+                # --- BOTÓN DE CONFIRMACIÓN WHATSAPP (Aparece tras registrar) ---
+                if st.session_state.ultimo_registro:
+                    reg = st.session_state.ultimo_registro
+                    msg_wa = (
+                        f"🚀 *REGISTRO NEOMOTIC*\n"
+                        f"👤 *Empleado:* {reg['empleado']}\n"
+                        f"📍 *Acción:* {reg['tipo'].upper()}\n"
+                        f"⏰ *Hora:* {reg['hora']}\n"
+                        f"✅ *Ubicación:* Verificada"
+                    )
+                    texto_url = urllib.parse.quote(msg_wa)
+                    url_wa = f"https://wa.me{TELEFONO_ADMIN_WA}?text={texto_url}"
+                    st.link_button("📲 Enviar comprobante por WhatsApp", url_wa, use_container_width=True)
+
             else:
                 st.error("QR no legible.")
     else:
@@ -162,5 +176,3 @@ with st.expander("🔐 Panel de Administración"):
                 st.table(pd.DataFrame(resumen_lista))
                 csv = df_dia.to_csv(index=False).encode('utf-8')
                 st.download_button("📥 Descargar Reporte CSV", csv, f"reporte_{fecha_sel}.csv", "text/csv")
-
-
