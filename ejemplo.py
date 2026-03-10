@@ -24,7 +24,6 @@ OFICINA_LON = -96.174232
 RADIO_PERMITIDO = 1000   
 TELEFONO_ADMIN_WA = "5212296936270" 
 
-# --- FUNCIÓN: ENVIAR REPORTE POR EMAIL ---
 def enviar_reporte_semanal(df):
     try:
         # 1. Validación inicial de secretos
@@ -35,47 +34,52 @@ def enviar_reporte_semanal(df):
         except KeyError:
             return "¡Faltan los secretos en la configuración!"
 
-        # 2. TODO ESTO DEBE ESTAR INDENTADO (DENTRO DEL TRY PRINCIPAL)
+        # 2. Configuración de fechas y FILTRO (Últimos 7 días)
         hoy = datetime.now(zona_veracruz)
+        hace_7_dias = hoy - timedelta(days=7)
         
         df_temp = df.copy()
-        if not pd.api.types.is_datetime64_any_dtype(df_temp['Hora']):
-             df_temp['Hora_dt'] = pd.to_datetime(df_temp['Hora'], dayfirst=True, errors='coerce')
-        else:
-             df_temp['Hora_dt'] = df_temp['Hora']
-
-        resumen = df_temp.groupby(['Empleado', 'Tipo']).size().unstack(fill_value=0)
+        # Convertir a datetime para filtrar
+        df_temp['Hora_dt'] = pd.to_datetime(df_temp['Hora'], dayfirst=True, errors='coerce')
         
+        # Aplicar el filtro
+        df_filtrado = df_temp[df_temp['Hora_dt'].dt.date >= hace_7_dias.date()]
+        
+        if df_filtrado.empty:
+            return "No hay registros en los últimos 7 días para enviar."
+
+        # 3. Generar Resumen para el cuerpo del correo
+        resumen = df_filtrado.groupby(['Empleado', 'Tipo']).size().unstack(fill_value=0)
+        
+        # 4. Configuración del Mensaje
         msg = MIMEMultipart()
         msg['From'] = REMITENTE
-        msg['To'] = "francisco.ramirez@neomotic.com, rodolfo.fuentes@neomotic.com" .join(DESTINATARIOS)
+        msg['To'] = ", ".join(DESTINATARIOS)
         msg['Subject'] = f"📊 Reporte de Asistencia NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
         
-        cuerpo = f"Hola,\n\nSe adjunta el resumen de asistencias solicitado:\n\n{resumen.to_string()}\n\nGenerado por Sistema NEOMOTIC."
+        cuerpo = f"Hola,\n\nSe adjunta el resumen de asistencias de los últimos 7 días:\n\n{resumen.to_string()}\n\nGenerado por Sistema NEOMOTIC."
         msg.attach(MIMEText(cuerpo, 'plain'))
         
-        # --- CAMBIO CLAVE: CREAR EL ARCHIVO ADJUNTO ---
-        csv_binario = df.to_csv(index=False).encode('utf-8')
+        # 5. CREAR Y ADJUNTAR ARCHIVO (Solo datos filtrados)
+        # Eliminamos la columna auxiliar 'Hora_dt' para que el CSV esté limpio
+        csv_binario = df_filtrado.drop(columns=['Hora_dt']).to_csv(index=False).encode('utf-8')
+        
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(csv_binario)
         encoders.encode_base64(part)
-        part.add_header('Content-Disposition', f'attachment; filename="Reporte_{hoy.strftime("%Y%m%d")}.csv"')
-        msg.attach(part) # Se "pega" el archivo al correo
-        # ---------------------------------------------
-        # Nombre personalizado que pediste
+        
         nombre_archivo = "Reporte_Asistencia_TRV.csv"
         part.add_header('Content-Disposition', f'attachment; filename={nombre_archivo}')
         msg.attach(part)
-        # --------------------------------------------------------------------
 
-
+        # 6. Envío Final
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(REMITENTE, PASSWORD_APP)
         server.sendmail(REMITENTE, DESTINATARIOS, msg.as_string())
         server.quit()
         
-        return True # Ahora sí devolverá True al finalizar con éxito
+        return True 
 
     except Exception as e:
         return f"Error inesperado: {str(e)}"
@@ -215,6 +219,7 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
 
