@@ -27,7 +27,8 @@ def enviar_reporte_semanal(df):
         PASSWORD_APP = st.secrets["EMAIL_PASSWORD"]
         EMAIL_SENDER = st.secrets["EMAIL_USER"]
         DESTINATARIO = "francisco.ramirez@neomotic.com"
-        except KeyError:
+        
+    except KeyError:
         st.error("¡Faltan los secretos en la configuración!")
         
     
@@ -195,6 +196,7 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
 
