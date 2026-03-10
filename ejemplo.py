@@ -19,15 +19,15 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 OFICINA_LAT = 19.245304  
 OFICINA_LON = -96.174232 
 RADIO_PERMITIDO = 1000   
-TELEFONO_ADMIN_WA = "5212296936270" # <--- Cambia por tu número real
+TELEFONO_ADMIN_WA = "5212296936270" 
 
 # --- FUNCIÓN: ENVIAR REPORTE POR EMAIL ---
 def enviar_reporte_semanal(df):
-    REMITENTE = st.secrets["EMAIL_USER"]
-    DESTINATARIO = "francisco.ramirez@neomotic.com"
-    PASSWORD_APP = st.secrets["EMAIL_PASS"]
-
     try:
+        REMITENTE = st.secrets["EMAIL_USER"]
+        DESTINATARIO = "francisco.ramirez@neomotic.com"
+        PASSWORD_APP = st.secrets["EMAIL_PASS"]
+
         hoy = datetime.now(zona_veracruz)
         hace_7_dias = hoy - timedelta(days=7)
         df['Hora_dt'] = pd.to_datetime(df['Hora'], dayfirst=True, errors='coerce')
@@ -133,9 +133,10 @@ if loc:
                 with col2:
                     st.button("📤 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True)
                 
-                # --- BOTÓN DE CONFIRMACIÓN WHATSAPP (Aparece tras registrar) ---
+                # --- BOTÓN DE CONFIRMACIÓN WHATSAPP CORREGIDO ---
                 if st.session_state.ultimo_registro:
                     reg = st.session_state.ultimo_registro
+                    # Formato de mensaje profesional
                     msg_wa = (
                         f"🚀 *REGISTRO NEOMOTIC*\n"
                         f"👤 *Empleado:* {reg['empleado']}\n"
@@ -143,8 +144,12 @@ if loc:
                         f"⏰ *Hora:* {reg['hora']}\n"
                         f"✅ *Ubicación:* Verificada"
                     )
+                    # Codificación segura para URLs
                     texto_url = urllib.parse.quote(msg_wa)
-                    url_wa = f"https://wa.me{TELEFONO_ADMIN_WA}?text={texto_url}"
+                    # Usamos api.whatsapp.com para máxima compatibilidad
+                    url_wa = f"https://api.whatsapp.com{TELEFONO_ADMIN_WA}&text={texto_url}"
+                    
+                    st.write("---")
                     st.link_button("📲 Enviar comprobante por WhatsApp", url_wa, use_container_width=True)
 
             else:
