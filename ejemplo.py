@@ -28,7 +28,7 @@ def enviar_reporte_semanal(df):
         try:
             PASSWORD_APP = st.secrets["EMAIL_PASSWORD"]
             REMITENTE = st.secrets["EMAIL_USER"]
-            DESTINATARIO = ["francisco.ramirez@neomotic.com", "rodolfo.fuentes@neomotic.com"]
+            DESTINATARIOS = ["francisco.ramirez@neomotic.com", "rodolfo.fuentes@neomotic.com"]
         except KeyError:
             return "¡Faltan los secretos en la configuración!"
 
@@ -45,7 +45,7 @@ def enviar_reporte_semanal(df):
         
         msg = MIMEMultipart()
         msg['From'] = REMITENTE
-        msg['To'] = DESTINATARIO
+        msg['To'] = "francisco.ramirez@neomotic.com, rodolfo.fuentes@neomotic.com".join(DESTINATARIOS)
         msg['Subject'] = f"📊 Reporte de Asistencia NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
         
         cuerpo = f"Hola,\n\nSe adjunta el resumen de asistencias solicitado:\n\n{resumen.to_string()}\n\nGenerado por Sistema NEOMOTIC."
@@ -197,6 +197,7 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
 
