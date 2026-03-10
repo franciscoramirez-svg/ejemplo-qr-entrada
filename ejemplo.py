@@ -13,7 +13,8 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 import urllib.parse  # Necesario para WhatsApp
-
+import requests
+from email.mime.image import MIMEImage
 
 # --- 1. CONFIGURACIÓN INICIAL ---
 zona_veracruz = pytz.timezone('America/Mexico_City')
@@ -251,6 +252,7 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
 
