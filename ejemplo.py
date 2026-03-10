@@ -7,6 +7,9 @@ import cv2
 import numpy as np
 from math import radians, cos, sin, asin, sqrt
 import pytz
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 # --- 1. CONFIGURACIÓN INICIAL ---
 zona_veracruz = pytz.timezone('America/Mexico_City')
@@ -14,7 +17,46 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 OFICINA_LAT = 19.245304  
 OFICINA_LON = -96.174232 
-RADIO_PERMITIDO = 1000   
+RADIO_PERMITIDO = 500   
+
+# --- FUNCIÓN: ENVIAR REPORTE POR EMAIL ---
+def enviar_reporte_semanal(df):
+    # Configuración - REEMPLAZAR ESTOS DATOS
+    REMITENTE = st.secrets["EMAIL_USER"]
+    DESTINATARIO = "francisco.ramirez@neomotic.com"
+    PASSWORD_APP = st.secrets["EMAIL_PASS"]
+
+    try:
+        hoy = datetime.now(zona_veracruz)
+        hace_7_dias = hoy - timedelta(days=7)
+        
+        # Filtrar datos de la última semana
+        df['Hora_dt'] = pd.to_datetime(df['Hora'], dayfirst=True, errors='coerce')
+        df_semana = df[df['Hora_dt'] >= hace_7_dias].copy()
+        
+        if df_semana.empty:
+            return "No hay datos para enviar esta semana."
+
+        # Crear un resumen simple para el cuerpo del correo
+        resumen = df_semana.groupby(['Empleado', 'Tipo']).size().unstack(fill_value=0)
+        
+        msg = MIMEMultipart()
+        msg['From'] = REMITENTE
+        msg['To'] = DESTINATARIO
+        msg['Subject'] = f"📊 Reporte Semanal NEOMOTIC ({hace_7_dias.strftime('%d/%m')} al {hoy.strftime('%d/%m')})"
+        
+        cuerpo = f"Hola,\n\nEste es el resumen de asistencias de la última semana:\n\n{resumen.to_string()}\n\nGenerado automáticamente por el Sistema NEOMOTIC."
+        msg.attach(MIMEText(cuerpo, 'plain'))
+
+        # Conexión al servidor
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(REMITENTE, PASSWORD_APP)
+        server.send_message(msg)
+        server.quit()
+        return True
+    except Exception as e:
+        return str(e)
 
 def calcular_distancia(lat1, lon1, lat2, lon2):
     lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
@@ -25,9 +67,23 @@ def calcular_distancia(lat1, lon1, lat2, lon2):
     return c * 6371000 
 
 st.set_page_config(page_title="NEOMOTIC Access", page_icon="📍")
+
+# --- 2. LOGICA DE REPORTE JUEVES (BARRA LATERAL) ---
+ahora = datetime.now(zona_veracruz)
+if ahora.strftime('%A') == 'Thursday': # Aparece solo los jueves
+    with st.sidebar:
+        st.warning("📅 ¡Hoy es jueves de reporte!")
+        if st.button("📧 Enviar Reporte Semanal al Jefe"):
+            df_para_correo = conn.read(ttl=0)
+            resultado = enviar_reporte_semanal(df_para_correo)
+            if resultado is True:
+                st.success("Reporte enviado con éxito.")
+            else:
+                st.error(f"Error: {resultado}")
+
 st.title("📍 Registro de Asistencia Pro")
 
-# --- 2. GESTIÓN DE ESTADO (PREVIENE DUPLICADOS POR CLIC) ---
+# --- 3. GESTIÓN DE ESTADO Y REGISTRO ---
 if 'procesando' not in st.session_state:
     st.session_state.procesando = False
 
@@ -36,7 +92,7 @@ loc = get_geolocation()
 if loc:
     lat_actual = loc['coords']['latitude']
     lon_actual = loc['coords']['longitude']
-    accuracy = loc['coords'].get('accuracy', 0) # Mejora: Validar precisión GPS
+    accuracy = loc['coords'].get('accuracy', 0)
     distancia = calcular_distancia(lat_actual, lon_actual, OFICINA_LAT, OFICINA_LON)
     
     if distancia <= RADIO_PERMITIDO:
@@ -50,17 +106,14 @@ if loc:
 
             if data:
                 df_actual = conn.read(ttl=0)
-                ahora = datetime.now(zona_veracruz)
                 fecha_hoy = ahora.strftime("%d/%m/%Y")
                 hora_str = ahora.strftime("%d/%m/%Y %H:%M:%S")
 
                 st.subheader(f"Empleado: {data}")
                 col1, col2 = st.columns(2)
 
-                # --- LÓGICA DE REGISTRO OPTIMIZADA ---
                 def registrar(tipo):
                     st.session_state.procesando = True
-                    # Evitar registros dobles en el mismo minuto
                     ya_existe = not df_actual[(df_actual['Empleado'] == data) & 
                                             (df_actual['Hora'].str.contains(fecha_hoy)) & 
                                             (df_actual['Tipo'] == tipo)].empty
@@ -83,37 +136,30 @@ if loc:
             else:
                 st.error("QR no legible.")
     else:
-        st.error(f"Fuera de rango ({int(distancia)}m). Acércate a la oficina.")
+        st.error(f"Fuera de rango ({int(distancia)}m).")
 else:
     st.info("Obteniendo ubicación...")
 
-# --- 3. PANEL ADMIN MEJORADO CON CÁLCULO DE HORAS ---
+# --- 4. PANEL ADMIN ---
 st.divider()
 with st.expander("🔐 Panel de Administración"):
     if st.text_input("Contraseña", type="password") == "NEOMOTIC2024":
         df_admin = conn.read(ttl=0)
         if not df_admin.empty:
-            df_admin['Hora_dt'] = pd.to_datetime(df_admin['Hora'], dayfirst=True)
-            
-            # Filtro por día
-            fecha_sel = st.date_input("Consultar día:", datetime.now(zona_veracruz))
+            df_admin['Hora_dt'] = pd.to_datetime(df_admin['Hora'], dayfirst=True, errors='coerce')
+            fecha_sel = st.date_input("Consultar día:", ahora)
             df_dia = df_admin[df_admin['Hora_dt'].dt.date == fecha_sel]
             
-            # Mejora: Cálculo de Horas Trabajadas
             if not df_dia.empty:
-                resumen = []
+                resumen_lista = []
                 for emp in df_dia['Empleado'].unique():
                     d_emp = df_dia[df_dia['Empleado'] == emp]
-                    entrada = d_emp[d_emp['Tipo'] == 'Entrada']['Hora_dt'].min()
-                    salida = d_emp[d_emp['Tipo'] == 'Salida']['Hora_dt'].max()
-                    
-                    horas = (salida - entrada).total_seconds()/3600 if pd.notnull(salida) and pd.notnull(entrada) else 0
-                    resumen.append({"Empleado": emp, "Entrada": entrada, "Salida": salida, "Horas": round(horas, 2)})
+                    ent = d_emp[d_emp['Tipo'] == 'Entrada']['Hora_dt'].min()
+                    sal = d_emp[d_emp['Tipo'] == 'Salida']['Hora_dt'].max()
+                    horas = (sal - ent).total_seconds()/3600 if pd.notnull(sal) and pd.notnull(ent) else 0
+                    resumen_lista.append({"Empleado": emp, "Entrada": ent, "Salida": sal, "Horas": round(horas, 2)})
                 
-                st.table(pd.DataFrame(resumen))
-                
-                # Mejora: Exportar a CSV
+                st.table(pd.DataFrame(resumen_lista))
                 csv = df_dia.to_csv(index=False).encode('utf-8')
                 st.download_button("📥 Descargar Reporte CSV", csv, f"reporte_{fecha_sel}.csv", "text/csv")
-            else:
-                st.info("Sin registros para este día.")
+
