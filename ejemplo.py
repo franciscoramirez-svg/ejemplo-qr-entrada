@@ -85,7 +85,7 @@ if ahora.strftime('%A') == 'Thursday':
             else:
                 st.error(f"Error: {resultado}")
 
-st.title("📍 Registro de Asistencia Pro")
+st.title("📍 Registro de Asistencia del personal en TRV")
 
 # --- 3. GESTIÓN DE ESTADO Y REGISTRO ---
 if 'procesando' not in st.session_state:
@@ -197,6 +197,7 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
 
