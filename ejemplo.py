@@ -17,7 +17,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 OFICINA_LAT = 19.245304  
 OFICINA_LON = -96.174232 
-RADIO_PERMITIDO = 500   
+RADIO_PERMITIDO = 1000   
 
 # --- FUNCIÓN: ENVIAR REPORTE POR EMAIL ---
 def enviar_reporte_semanal(df):
@@ -162,4 +162,5 @@ with st.expander("🔐 Panel de Administración"):
                 st.table(pd.DataFrame(resumen_lista))
                 csv = df_dia.to_csv(index=False).encode('utf-8')
                 st.download_button("📥 Descargar Reporte CSV", csv, f"reporte_{fecha_sel}.csv", "text/csv")
+
 
