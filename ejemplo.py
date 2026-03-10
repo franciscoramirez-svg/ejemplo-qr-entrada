@@ -24,9 +24,12 @@ TELEFONO_ADMIN_WA = "5212296936270"
 # --- FUNCIÓN: ENVIAR REPORTE POR EMAIL ---
 def enviar_reporte_semanal(df):
     try:
-        REMITENTE = "trv@neomotic.com"
-        PASSWORD_APP = "tesamksjibgyblsx"
+        PASSWORD_APP = st.secrets["EMAIL_PASSWORD"]
+        EMAIL_SENDER = st.secrets["EMAIL_USER"]
         DESTINATARIO = "francisco.ramirez@neomotic.com"
+        except KeyError:
+        st.error("¡Faltan los secretos en la configuración!")
+        
     
 
         hoy = datetime.now(zona_veracruz)
@@ -192,5 +195,6 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
