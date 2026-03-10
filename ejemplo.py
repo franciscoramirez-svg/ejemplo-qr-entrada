@@ -30,6 +30,7 @@ def enviar_reporte_semanal(df):
         
     except KeyError:
         st.error("¡Faltan los secretos en la configuración!")
+        return  # <--- ESTO ES VITAL. Detiene la función aquí mismo.
         
     
 
@@ -196,6 +197,7 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
 
