@@ -62,6 +62,12 @@ def enviar_reporte_semanal(df):
         part.add_header('Content-Disposition', f'attachment; filename="Reporte_{hoy.strftime("%Y%m%d")}.csv"')
         msg.attach(part) # Se "pega" el archivo al correo
         # ---------------------------------------------
+        # Nombre personalizado que pediste
+        nombre_archivo = "Reporte_Asistencia_TRV.csv"
+        adjunto.add_header('Content-Disposition', f'attachment; filename={nombre_archivo}')
+        msg.attach(part)
+        # --------------------------------------------------------------------
+
 
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
@@ -209,6 +215,7 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
 
