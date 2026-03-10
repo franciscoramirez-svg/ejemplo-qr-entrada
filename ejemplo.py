@@ -24,13 +24,11 @@ TELEFONO_ADMIN_WA = "5212296936270"
 # --- FUNCIÓN: ENVIAR REPORTE POR EMAIL ---
 def enviar_reporte_semanal(df):
     try:
-        # Intentar obtener credenciales de Secrets
-        REMITENTE = st.secrets.get("EMAIL_USER", "NO_CONFIGURADO")
-        PASSWORD_APP = st.secrets.get("EMAIL_PASS", "NO_CONFIGURADO")
+         REMITENTE = "trv@neomotic.com"
+        PASSWORD_APP = "tesamksjibgyblsx"
         DESTINATARIO = "francisco.ramirez@neomotic.com"
 
-        if REMITENTE == "NO_CONFIGURADO":
-            return "Error: Las credenciales no están configuradas en los Secrets de Streamlit."
+    
 
         hoy = datetime.now(zona_veracruz)
         
@@ -195,3 +193,4 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
