@@ -24,43 +24,43 @@ TELEFONO_ADMIN_WA = "5212296936270"
 # --- FUNCIÓN: ENVIAR REPORTE POR EMAIL ---
 def enviar_reporte_semanal(df):
     try:
-        PASSWORD_APP = st.secrets["EMAIL_PASSWORD"]
-        REMITENTE = st.secrets["EMAIL_USER"]
-        DESTINATARIO = "francisco.ramirez@neomotic.com"
-        
-     except KeyError:
-        st.error("¡Faltan los secretos en la configuración!")
-        return  # <--- ESTO ES VITAL. Detiene la función aquí mismo.
-        
-    
+        # 1. Validación inicial de secretos
+        try:
+            PASSWORD_APP = st.secrets["EMAIL_PASSWORD"]
+            REMITENTE = st.secrets["EMAIL_USER"]
+            DESTINATARIO = "francisco.ramirez@neomotic.com"
+        except KeyError:
+            return "¡Faltan los secretos en la configuración!"
 
-            hoy = datetime.now(zona_veracruz)
-            
-            # Asegurar que los datos tengan formato de fecha para el resumen
-            df_temp = df.copy()
-            if not pd.api.types.is_datetime64_any_dtype(df_temp['Hora']):
-                 df_temp['Hora_dt'] = pd.to_datetime(df_temp['Hora'], dayfirst=True, errors='coerce')
-            else:
-                 df_temp['Hora_dt'] = df_temp['Hora']
-    
-            resumen = df_temp.groupby(['Empleado', 'Tipo']).size().unstack(fill_value=0)
-            
-            msg = MIMEMultipart()
-            msg['From'] = REMITENTE
-            msg['To'] = DESTINATARIO
-            msg['Subject'] = f"📊 Reporte de Asistencia NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
-            
-            cuerpo = f"Hola,\n\nSe adjunta el resumen de asistencias solicitado:\n\n{resumen.to_string()}\n\nGenerado por Sistema NEOMOTIC."
-            msg.attach(MIMEText(cuerpo, 'plain'))
-    
-            server = smtplib.SMTP('smtp.gmail.com', 587)
-            server.starttls()
-            server.login(REMITENTE, PASSWORD_APP)
-            server.send_message(msg)
-            server.quit()
-            return True
+        # 2. TODO ESTO DEBE ESTAR INDENTADO (DENTRO DEL TRY PRINCIPAL)
+        hoy = datetime.now(zona_veracruz)
+        
+        df_temp = df.copy()
+        if not pd.api.types.is_datetime64_any_dtype(df_temp['Hora']):
+             df_temp['Hora_dt'] = pd.to_datetime(df_temp['Hora'], dayfirst=True, errors='coerce')
+        else:
+             df_temp['Hora_dt'] = df_temp['Hora']
+
+        resumen = df_temp.groupby(['Empleado', 'Tipo']).size().unstack(fill_value=0)
+        
+        msg = MIMEMultipart()
+        msg['From'] = REMITENTE
+        msg['To'] = DESTINATARIO
+        msg['Subject'] = f"📊 Reporte de Asistencia NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
+        
+        cuerpo = f"Hola,\n\nSe adjunta el resumen de asistencias solicitado:\n\n{resumen.to_string()}\n\nGenerado por Sistema NEOMOTIC."
+        msg.attach(MIMEText(cuerpo, 'plain'))
+
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(REMITENTE, PASSWORD_APP)
+        server.send_message(msg)
+        server.quit()
+        
+        return True # Ahora sí devolverá True al finalizar con éxito
+
     except Exception as e:
-        return str(e)
+        return f"Error inesperado: {str(e)}"
 
 def calcular_distancia(lat1, lon1, lat2, lon2):
     lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
@@ -197,6 +197,7 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
 
