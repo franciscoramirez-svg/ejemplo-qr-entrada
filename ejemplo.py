@@ -28,21 +28,23 @@ def enviar_reporte_semanal(df):
         DESTINATARIO = "francisco.ramirez@neomotic.com"
         PASSWORD_APP = st.secrets["EMAIL_PASS"]
 
+        # Se usa para el asunto y filtrado si es llamado automáticamente los jueves
         hoy = datetime.now(zona_veracruz)
         hace_7_dias = hoy - timedelta(days=7)
-        df['Hora_dt'] = pd.to_datetime(df['Hora'], dayfirst=True, errors='coerce')
-        df_semana = df[df['Hora_dt'] >= hace_7_dias].copy()
         
-        if df_semana.empty:
-            return "No hay datos para enviar esta semana."
+        # Intentar convertir columna Hora si no viene como datetime
+        if not pd.api.types.is_datetime64_any_dtype(df['Hora']):
+             df['Hora_dt'] = pd.to_datetime(df['Hora'], dayfirst=True, errors='coerce')
+        else:
+             df['Hora_dt'] = df['Hora']
 
-        resumen = df_semana.groupby(['Empleado', 'Tipo']).size().unstack(fill_value=0)
+        resumen = df.groupby(['Empleado', 'Tipo']).size().unstack(fill_value=0)
         msg = MIMEMultipart()
         msg['From'] = REMITENTE
         msg['To'] = DESTINATARIO
-        msg['Subject'] = f"📊 Reporte Semanal NEOMOTIC ({hace_7_dias.strftime('%d/%m')} al {hoy.strftime('%d/%m')})"
+        msg['Subject'] = f"📊 Reporte de Asistencia NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
         
-        cuerpo = f"Hola,\n\nResumen de asistencias:\n\n{resumen.to_string()}\n\nGenerado por Sistema NEOMOTIC."
+        cuerpo = f"Hola,\n\nSe adjunta el resumen de asistencias solicitado:\n\n{resumen.to_string()}\n\nGenerado por Sistema NEOMOTIC."
         msg.attach(MIMEText(cuerpo, 'plain'))
 
         server = smtplib.SMTP('smtp.gmail.com', 587)
@@ -133,23 +135,20 @@ if loc:
                 with col2:
                     st.button("📤 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True)
                 
-                # --- BLOQUE DE WHATSAPP REFORZADO ---
                 if st.session_state.ultimo_registro:
                     reg = st.session_state.ultimo_registro
                     resumen_texto = f"Registro Neomotic: {reg['empleado']} - {reg['tipo'].upper()} - {reg['hora']}"
                     texto_url = urllib.parse.quote(resumen_texto)
-                    
-                    # Protocolos diferenciados para evitar bloqueo del navegador
                     url_directa = f"whatsapp://send?phone={TELEFONO_ADMIN_WA}&text={texto_url}"
                     url_web = f"https://web.whatsapp.com{TELEFONO_ADMIN_WA}&text={texto_url}"
                     
                     st.divider()
-                    st.info("Selecciona el método de confirmación:")
+                    st.info("Confirmar por WhatsApp:")
                     c_wa1, c_wa2 = st.columns(2)
                     with c_wa1:
-                        st.link_button("📱 En Celular (App)", url_directa, use_container_width=True)
+                        st.link_button("📱 En Celular", url_directa, use_container_width=True)
                     with c_wa2:
-                        st.link_button("💻 En Computadora", url_web, use_container_width=True)
+                        st.link_button("💻 En PC", url_web, use_container_width=True)
 
             else:
                 st.error("QR no legible.")
@@ -180,3 +179,16 @@ with st.expander("🔐 Panel de Administración"):
                 st.table(pd.DataFrame(resumen_lista))
                 csv = df_dia.to_csv(index=False).encode('utf-8')
                 st.download_button("📥 Descargar Reporte CSV", csv, f"reporte_{fecha_sel}.csv", "text/csv")
+                
+                # --- BOTÓN DE PRUEBA DE ENVÍO DE CORREO ---
+                st.divider()
+                st.subheader("📧 Prueba de Sistema de Correo")
+                if st.button("Mandar Reporte de HOY por Correo"):
+                    with st.spinner("Enviando..."):
+                        res_envio = enviar_reporte_semanal(df_dia)
+                        if res_envio is True:
+                            st.success("¡Correo enviado! Revisa francisco.ramirez@neomotic.com")
+                        else:
+                            st.error(f"Error: {res_envio}")
+            else:
+                st.info("Sin registros hoy.")
