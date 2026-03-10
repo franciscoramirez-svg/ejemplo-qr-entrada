@@ -192,11 +192,12 @@ with st.expander("🔐 Panel de Administración"):
                     with st.spinner("Enviando..."):
                         resultado_envio = enviar_reporte_semanal(df_dia)
                         if resultado_envio is True:
-                            st.success("¡Correo enviado! Revisa francisco.ramirez@neomotic.com")
+                            st.success("¡Correo enviado! Revisa tu bandeja")
                         else:
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
 
