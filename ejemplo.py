@@ -39,31 +39,54 @@ def enviar_reporte_semanal(df):
         hace_7_dias = hoy - timedelta(days=7)
         
         df_temp = df.copy()
-        # Convertir a datetime para filtrar
         df_temp['Hora_dt'] = pd.to_datetime(df_temp['Hora'], dayfirst=True, errors='coerce')
-        
-        # Aplicar el filtro
-        df_filtrado = df_temp[df_temp['Hora_dt'].dt.date >= hace_7_dias.date()]
+        df_filtrado = df_temp[df_temp['Hora_dt'].dt.date >= hace_7_dias.date()].copy()
         
         if df_filtrado.empty:
             return "No hay registros en los últimos 7 días para enviar."
 
-        # 3. Generar Resumen para el cuerpo del correo
+        # 3. Generar Resumen en formato Tabla HTML
         resumen = df_filtrado.groupby(['Empleado', 'Tipo']).size().unstack(fill_value=0)
-        
-        # 4. Configuración del Mensaje
-        msg = MIMEMultipart()
+        resumen_html = resumen.to_html(border=1, justify='center', classes='table')
+
+        # 4. Configuración del Mensaje (HTML)
+        msg = MIMEMultipart("alternative")
         msg['From'] = REMITENTE
         msg['To'] = ", ".join(DESTINATARIOS)
         msg['Subject'] = f"📊 Reporte de Asistencia NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
         
-        cuerpo = f"Hola,\n\nSe adjunta el resumen de asistencias de los últimos 7 días:\n\n{resumen.to_string()}\n\nGenerado por Sistema NEOMOTIC."
-        msg.attach(MIMEText(cuerpo, 'plain'))
+        # Diseño profesional con Logo
+        html_cuerpo = f"""
+        <html>
+        <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; line-height: 1.6;">
+            <div style="max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
+                <div style="background-color: #ffffff; padding: 20px; text-align: center; border-bottom: 3px solid #004a99;">
+                    <img src="https://www.neomotic.com" alt="NEOMOTIC Logo" style="width: 180px;">
+                </div>
+                <div style="padding: 30px;">
+                    <h2 style="color: #004a99; margin-top: 0;">Reporte Semanal de Asistencia</h2>
+                    <p>Hola Francisco y Rodolfo,</p>
+                    <p>Se adjunta el resumen de asistencias de los últimos 7 días (<b>{hace_7_dias.strftime('%d/%m/%Y')}</b> al <b>{hoy.strftime('%d/%m/%Y')}</b>):</p>
+                    
+                    <div style="margin: 25px 0;">
+                        {resumen_html}
+                    </div>
+                    
+                    <p style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #004a99; font-style: italic;">
+                        El detalle completo de cada registro se encuentra en el archivo <b>.csv</b> adjunto a este correo.
+                    </p>
+                </div>
+                <div style="background-color: #f4f4f4; padding: 15px; text-align: center; font-size: 12px; color: #777;">
+                    © {hoy.year} NEOMOTIC TRV | Sistema Automático de Gestión
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        msg.attach(MIMEText(html_cuerpo, 'html'))
         
-        # 5. CREAR Y ADJUNTAR ARCHIVO (Solo datos filtrados)
-        # Eliminamos la columna auxiliar 'Hora_dt' para que el CSV esté limpio
+        # 5. ADJUNTAR ARCHIVO CSV
         csv_binario = df_filtrado.drop(columns=['Hora_dt']).to_csv(index=False).encode('utf-8')
-        
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(csv_binario)
         encoders.encode_base64(part)
@@ -219,6 +242,7 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
 
