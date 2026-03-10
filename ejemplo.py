@@ -133,24 +133,18 @@ if loc:
                 with col2:
                     st.button("📤 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True)
                 
-                # --- BOTÓN DE CONFIRMACIÓN WHATSAPP CORREGIDO ---
+                # --- BOTÓN DE CONFIRMACIÓN WHATSAPP (VERSIÓN CORREGIDA) ---
                 if st.session_state.ultimo_registro:
                     reg = st.session_state.ultimo_registro
-                    # Formato de mensaje profesional
-                    msg_wa = (
-                        f"🚀 *REGISTRO NEOMOTIC*\n"
-                        f"👤 *Empleado:* {reg['empleado']}\n"
-                        f"📍 *Acción:* {reg['tipo'].upper()}\n"
-                        f"⏰ *Hora:* {reg['hora']}\n"
-                        f"✅ *Ubicación:* Verificada"
-                    )
-                    # Codificación segura para URLs
-                    texto_url = urllib.parse.quote(msg_wa)
-                    # Usamos api.whatsapp.com para máxima compatibilidad
-                    url_wa = f"https://api.whatsapp.com{TELEFONO_ADMIN_WA}&text={texto_url}"
+                    # Texto simple para asegurar compatibilidad total
+                    resumen_wa = f"🚀 REGISTRO NEOMOTIC: {reg['empleado']} | {reg['tipo'].upper()} | {reg['hora']}"
+                    texto_url = urllib.parse.quote(resumen_wa)
                     
-                    st.write("---")
-                    st.link_button("📲 Enviar comprobante por WhatsApp", url_wa, use_container_width=True)
+                    # URL wa.me es la que menos bloquean los navegadores móviles
+                    url_wa = f"https://wa.me{TELEFONO_ADMIN_WA}?text={texto_url}"
+                    
+                    st.markdown("---")
+                    st.link_button("📲 Confirmar por WhatsApp", url_wa, use_container_width=True)
 
             else:
                 st.error("QR no legible.")
@@ -181,4 +175,3 @@ with st.expander("🔐 Panel de Administración"):
                 st.table(pd.DataFrame(resumen_lista))
                 csv = df_dia.to_csv(index=False).encode('utf-8')
                 st.download_button("📥 Descargar Reporte CSV", csv, f"reporte_{fecha_sel}.csv", "text/csv")
-
