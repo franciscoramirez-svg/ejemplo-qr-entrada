@@ -24,25 +24,25 @@ TELEFONO_ADMIN_WA = "5212296936270"
 # --- FUNCIÓN: ENVIAR REPORTE POR EMAIL ---
 def enviar_reporte_semanal(df):
     try:
+        # Intentar obtener credenciales de Secrets
         REMITENTE = st.secrets.get("EMAIL_USER", "NO_CONFIGURADO")
         PASSWORD_APP = st.secrets.get("EMAIL_PASS", "NO_CONFIGURADO")
         DESTINATARIO = "francisco.ramirez@neomotic.com"
 
         if REMITENTE == "NO_CONFIGURADO":
-        return "Error: Las credenciales no están configuradas en los Secrets de Streamlit."
+            return "Error: Las credenciales no están configuradas en los Secrets de Streamlit."
 
-
-        # Se usa para el asunto y filtrado si es llamado automáticamente los jueves
         hoy = datetime.now(zona_veracruz)
-        hace_7_dias = hoy - timedelta(days=7)
         
-        # Intentar convertir columna Hora si no viene como datetime
-        if not pd.api.types.is_datetime64_any_dtype(df['Hora']):
-             df['Hora_dt'] = pd.to_datetime(df['Hora'], dayfirst=True, errors='coerce')
+        # Asegurar que los datos tengan formato de fecha para el resumen
+        df_temp = df.copy()
+        if not pd.api.types.is_datetime64_any_dtype(df_temp['Hora']):
+             df_temp['Hora_dt'] = pd.to_datetime(df_temp['Hora'], dayfirst=True, errors='coerce')
         else:
-             df['Hora_dt'] = df['Hora']
+             df_temp['Hora_dt'] = df_temp['Hora']
 
-        resumen = df.groupby(['Empleado', 'Tipo']).size().unstack(fill_value=0)
+        resumen = df_temp.groupby(['Empleado', 'Tipo']).size().unstack(fill_value=0)
+        
         msg = MIMEMultipart()
         msg['From'] = REMITENTE
         msg['To'] = DESTINATARIO
@@ -153,7 +153,6 @@ if loc:
                         st.link_button("📱 En Celular", url_directa, use_container_width=True)
                     with c_wa2:
                         st.link_button("💻 En PC", url_web, use_container_width=True)
-
             else:
                 st.error("QR no legible.")
     else:
@@ -184,17 +183,15 @@ with st.expander("🔐 Panel de Administración"):
                 csv = df_dia.to_csv(index=False).encode('utf-8')
                 st.download_button("📥 Descargar Reporte CSV", csv, f"reporte_{fecha_sel}.csv", "text/csv")
                 
-                # --- BOTÓN DE PRUEBA DE ENVÍO DE CORREO ---
+                # --- PRUEBA DE CORREO ---
                 st.divider()
                 st.subheader("📧 Prueba de Sistema de Correo")
                 if st.button("Mandar Reporte de HOY por Correo"):
                     with st.spinner("Enviando..."):
-                        res_envio = enviar_reporte_semanal(df_dia)
-                        if res_envio is True:
+                        resultado_envio = enviar_reporte_semanal(df_dia)
+                        if resultado_envio is True:
                             st.success("¡Correo enviado! Revisa francisco.ramirez@neomotic.com")
                         else:
-                            st.error(f"Error: {res_envio}")
+                            st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
-
-
