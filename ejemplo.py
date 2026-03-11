@@ -72,7 +72,7 @@ def enviar_reporte_semanal(df):
 
         msg = MIMEMultipart("alternative")
         msg['From'], msg['To'] = REMITENTE, ", ".join(DESTINATARIOS)
-        msg['Subject'] = f" REPORTE DE ASISTENCIA EN TRV - {hoy.strftime('%d/%m/%Y')}"
+        msg['Subject'] = f" REPORTE DE ASISTENCIA SEMANAL TRV - {hoy.strftime('%d/%m/%Y')}"
 
                 # --- LÓGICA DE ALERTAS: IDENTIFICAR QUIÉNES TIENEN >= 3 RETARDOS ---
         conteo_retardos = df_filtrado[df_filtrado['Estatus'] == "Retardo"].groupby('Empleado').size()
@@ -290,6 +290,7 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
 
