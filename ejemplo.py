@@ -131,38 +131,54 @@ if loc:
     else: st.error("Fuera de rango.")
 
 # --- 4. PANEL ADMIN (MEJORAS 3 Y 4) ---
+# --- REEMPLAZA DESDE EL st.divider() AL FINAL DE TU CÓDIGO ---
 st.divider()
-with st.expander("🔐 Administración"):
-    if st.text_input("Password", type="password", key="p_adm") == "NEOMOTIC2024":
-        df_a = conn.read(ttl=0)
-        try:
-            lista_m = conn.read(worksheet="Empleados", ttl=0)['Nombre'].tolist()
-        except: lista_m = []
+with st.expander("🔐 Panel de Administración"):
+    if st.text_input("Contraseña", type="password", key="pass_admin_v3") == "NEOMOTIC2024":
+        df_admin = conn.read(ttl=0)
         
-        t1, t2, t3 = st.tabs(["📋 Hoy", "🚫 Faltantes", "🗺️ Mapa"])
-        df_a['Hora_dt'] = pd.to_datetime(df_a['Hora'], dayfirst=True, errors='coerce')
-        df_h = df_a[df_a['Hora_dt'].dt.date == ahora.date()]
+        # Pestañas para organizar la información
+        t1, t2, t3 = st.tabs(["📋 Registros Hoy", "🚫 Faltantes", "🗺️ Mapa"])
+        
+        # Filtrar datos de hoy
+        df_admin['Hora_dt'] = pd.to_datetime(df_admin['Hora'], dayfirst=True, errors='coerce')
+        df_hoy = df_admin[df_admin['Hora_dt'].dt.date == ahora.date()]
 
-        with t1: 
-            st.dataframe(df_h[['Empleado', 'Hora', 'Tipo', 'Estatus']], use_container_width=True)
-            if st.button("📧 Enviar Reporte de Hoy"): enviar_reporte_semanal(df_h)
+        with t1:
+            st.subheader("Registros del Día")
+            st.dataframe(df_hoy[['Empleado', 'Hora', 'Tipo', 'Estatus']], use_container_width=True)
+            
+            st.divider()
+            st.subheader("📧 Sistema de Envío")
+            
+            # NUEVO BOTÓN: Sin on_click para que el mensaje no desaparezca
+            if st.button("Mandar Reporte de HOY por Correo", key="btn_final_reporte"):
+                with st.spinner("Enviando reporte..."):
+                    # Ejecutamos la función y guardamos el resultado
+                    resultado_envio = enviar_reporte_semanal(df_hoy)
+                    
+                    if resultado_envio is True:
+                        # Este mensaje se quedará fijo en color verde
+                        st.success("✅ ¡Correo enviado con éxito! Ya puedes revisar tu bandeja.")
+                        st.toast("Reporte enviado", icon="📧")
+                    else:
+                        st.error(f"❌ Error al enviar: {resultado_envio}")
+
         with t2:
-            if lista_m:
-                llegaron = df_h[df_h['Tipo'] == 'Entrada']['Empleado'].unique()
+            # Lógica de faltantes
+            try:
+                lista_m = conn.read(worksheet="Empleados", ttl=0)['Nombre'].tolist()
+                llegaron = df_hoy[df_hoy['Tipo'] == 'Entrada']['Empleado'].unique()
                 faltan = [e for e in lista_m if e not in llegaron]
-                
                 if faltan:
                     st.error(f"⚠️ Faltan {len(faltan)} personas por registrar entrada:")
-                    # Mostramos la lista de nombres uno por uno para que sea más legible
-                    for persona in faltan:
-                        st.write(f"❌ {persona}")
+                    for p in faltan: st.write(f"❌ {p}")
                 else:
-                    st.success("✅ ¡Personal completo! Todos han registrado su entrada hoy.")
-            else:
-                st.info("ℹ️ No hay nombres en la pestaña 'Empleados' de tu Google Sheet.")
+                    st.success("✅ ¡Personal completo hoy!")
+            except:
+                st.info("ℹ️ Crea la pestaña 'Empleados' en Sheets para ver faltantes.")
 
         with t3:
-            pts = df_h.dropna(subset=['Lat', 'Lon']).rename(columns={'Lat':'lat', 'Lon':'lon'})
+            st.subheader("Ubicaciones en el Mapa")
+            pts = df_hoy.dropna(subset=['Lat', 'Lon']).rename(columns={'Lat':'lat', 'Lon':'lon'})
             st.map(pts if not pts.empty else pd.DataFrame({'lat':[OFICINA_LAT],'lon':[OFICINA_LON]}))
-
-
