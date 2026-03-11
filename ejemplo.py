@@ -43,54 +43,77 @@ def enviar_reporte_semanal(df):
         
         if df_filtrado.empty: return "Sin registros."
 
-        # Agrupación para Nómina
         df_filtrado['Fecha'] = df_filtrado['Hora_dt'].dt.date
+        
+        # Agrupamos datos para identificar entradas y salidas
         nom = df_filtrado.groupby(['Empleado', 'Fecha']).agg(
             Entrada=('Hora_dt', 'min'), 
-            Salida=('Hora_dt', 'max'), 
+            Salida=('Hora_dt', 'max'),
+            Registros=('Tipo', 'count'), # Contamos cuántas veces marcó
+            Primer_Tipo=('Tipo', 'first'),
+            Ultimo_Tipo=('Tipo', 'last'),
             Min_Retardo=('Min_Retardo', 'sum'), 
             Estatus_Dia=('Estatus', 'first')
         ).reset_index()
 
-        # Lógica de Horas Extras y Totales
-        def calcular_jornada(row):
-            if row['Entrada'] != row['Salida']:
+        def calcular_jornada_detallada(row):
+            total_h = 0.0
+            extras = 0.0
+            obs = "OK"
+            
+            # Caso 1: Solo marcó una vez (Olvidó el otro registro)
+            if row['Registros'] == 1:
+                if row['Primer_Tipo'] == 'Entrada':
+                    obs = "⚠️ Olvidó marcar SALIDA"
+                else:
+                    obs = "⚠️ Olvidó marcar ENTRADA"
+            
+            # Caso 2: Marcó Entrada y Salida (Registro completo)
+            elif row['Entrada'] != row['Salida']:
                 total_h = round((row['Salida'] - row['Entrada']).total_seconds()/3600, 2)
-                # Cálculo de Extras (Después de las 5:00 PM)
+                
+                # Horas Extras (Después de las 5:00 PM)
                 h_sal_ofic = datetime.combine(row['Salida'].date(), datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()).replace(tzinfo=zona_veracruz)
                 salida_real = row['Salida'].replace(tzinfo=zona_veracruz)
-                extras = 0.0
+                
                 if salida_real > h_sal_ofic:
                     extras = round((salida_real - h_sal_ofic).total_seconds()/3600, 2)
-                return pd.Series([total_h, extras])
-            return pd.Series([0.0, 0.0])
+                    obs = "CON HORAS EXTRAS"
+            
+            return pd.Series([total_h, extras, obs])
 
-        nom[['Total_Horas', 'Horas_Extras']] = nom.apply(calcular_jornada, axis=1)
+        # Aplicamos la nueva lógica
+        nom[['Total_Horas', 'Horas_Extras', 'Observaciones']] = nom.apply(calcular_jornada_detallada, axis=1)
 
-        # Formato Correo (Alertas y Resumen de Extras)
-        conteo = df_filtrado[df_filtrado['Estatus'] == "Retardo"].groupby('Empleado').size()
-        criticos = conteo[conteo >= 3]
-        total_extras_sem = nom.groupby('Empleado')['Horas_Extras'].sum()
-
+        # --- PREPARAR CORREO ---
+        conteo_retardos = df_filtrado[df_filtrado['Estatus'] == "Retardo"].groupby('Empleado').size()
+        criticos = conteo_retardos[conteo_retardos >= 3]
+        
+        # Resumen de incidencias (olvidos) para el cuerpo del correo
+        olvidos = nom[nom['Observaciones'].str.contains("⚠️")]
+        
         alerta_html = ""
         if not criticos.empty:
-            alerta_html = "<div style='background:#fff0f0;padding:10px;border-left:5px solid red;'><b>⚠️ RETARDOS CRÍTICOS:</b><ul>"
+            alerta_html += "<div style='background:#fff0f0;padding:10px;border-left:5px solid red;'><b>⚠️ RETARDOS CRÍTICOS:</b><ul>"
             for e, c in criticos.items(): alerta_html += f"<li>{e}: {c} retardos</li>"
+            alerta_html += "</ul></div><br>"
+            
+        if not olvidos.empty:
+            alerta_html += "<div style='background:#fff3cd;padding:10px;border-left:5px solid #ffc107;'><b>🔔 REGISTROS INCOMPLETOS:</b><ul>"
+            for _, r in olvidos.iterrows(): alerta_html += f"<li>{r['Empleado']} ({r['Fecha']}): {r['Observaciones']}</li>"
             alerta_html += "</ul></div>"
-        
-        resumen_extras = "<b>📈 RESUMEN DE HORAS EXTRAS:</b><ul>"
-        for e, h in total_extras_sem.items(): 
-            if h > 0: resumen_extras += f"<li>{e}: {h} hrs extras acumuladas.</li>"
-        resumen_extras += "</ul>"
 
         msg = MIMEMultipart()
-        msg['Subject'] = f"📊 Reporte Asistencia y Extras - {hoy.strftime('%d/%m/%Y')}"
-        msg.attach(MIMEText(f"<html><body><h2>Nómina Semanal TRV</h2>{alerta_html}<br>{resumen_extras}</body></html>", 'html'))
+        msg['Subject'] = f"📊 Reporte Nómina y Observaciones - {hoy.strftime('%d/%m/%Y')}"
+        msg.attach(MIMEText(f"<html><body><h2>Resumen Semanal NEOMOTIC</h2>{alerta_html}<br><p>El CSV adjunto contiene el desglose de Horas Extras y Observaciones.</p></body></html>", 'html'))
 
         # Adjunto CSV
         csv_name = f"REPORTE_ASISTENCIA_TRV_{hoy.strftime('%d_%m_%Y')}.csv"
+        # Limpiamos columnas temporales antes de exportar
+        csv_data = nom[['Empleado', 'Fecha', 'Entrada', 'Salida', 'Total_Horas', 'Horas_Extras', 'Min_Retardo', 'Estatus_Dia', 'Observaciones']]
+        
         part = MIMEBase('application', 'octet-stream')
-        part.set_payload(nom.to_csv(index=False).encode('utf-8'))
+        part.set_payload(csv_data.to_csv(index=False).encode('utf-8'))
         encoders.encode_base64(part)
         part.add_header('Content-Disposition', f'attachment; filename="{csv_name}"')
         msg.attach(part)
@@ -101,6 +124,7 @@ def enviar_reporte_semanal(df):
             s.sendmail(REMITENTE, DESTINATARIOS, msg.as_string())
         return True
     except Exception as e: return str(e)
+
 
 # --- 3. LÓGICA DE DISTANCIA ---
 def calcular_distancia(lat1, lon1, lat2, lon2):
@@ -179,3 +203,4 @@ with st.expander("🔐 Administración"):
             pts = df_h.dropna(subset=['Lat', 'Lon']).rename(columns={'Lat':'lat', 'Lon':'lon'})
             st.map(pts if not pts.empty else pd.DataFrame({'lat':[OFICINA_LAT],'lon':[OFICINA_LON]}))
             
+
