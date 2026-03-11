@@ -188,55 +188,44 @@ if loc:
                 st.subheader(f"Empleado: {data}")
                 col1, col2 = st.columns(2)
 
+                                # --- BUSCA ESTA PARTE EN TU CÓDIGO Y REEMPLÁZALA ---
                 def registrar(tipo):
-    st.session_state.procesando = True
-    ya_existe = not df_actual[(df_actual['Empleado'] == data) & 
-                            (df_actual['Hora'].str.contains(fecha_hoy)) & 
-                            (df_actual['Tipo'] == tipo)].empty
-    if ya_existe:
-        st.warning(f"Ya existe un registro de {tipo} para hoy.")
-    else:
-        # --- LÓGICA DE RETARDO (BASADA EN 07:00 AM) ---
-        estatus = "A Tiempo"
-        minutos_retardo = 0
-        
-        if tipo == "Entrada":
-            # Convertimos la hora oficial a objeto de tiempo
-            h_limite = datetime.strptime(HORA_ENTRADA_OFICIAL, "%H:%M:%S").time()
-            
-            # Calculamos la diferencia entre la hora actual y las 07:00 AM
-            dt_actual = datetime.combine(ahora.date(), ahora.time())
-            dt_limite = datetime.combine(ahora.date(), h_limite)
-            
-            diff = dt_actual - dt_limite
-            minutos_retardo = max(0, int(diff.total_seconds() / 60))
-            
-            # Si pasa de los 15 min de tolerancia (07:15 AM), es Retardo
-            if minutos_retardo > UMBRAL_RETARDO_MINUTOS:
-                estatus = "Retardo"
-            else:
-                estatus = "A Tiempo"
+                    # Todo este bloque debe tener 4 espacios de sangría hacia la derecha
+                    st.session_state.procesando = True
+                    ya_existe = not df_actual[(df_actual['Empleado'] == data) & 
+                                            (df_actual['Hora'].str.contains(fecha_hoy)) & 
+                                            (df_actual['Tipo'] == tipo)].empty
+                    if ya_existe:
+                        st.warning(f"Ya existe un registro de {tipo} para hoy.")
+                    else:
+                        estatus = "A Tiempo"
+                        minutos_retardo = 0
+                        if tipo == "Entrada":
+                            h_limite = datetime.strptime(HORA_ENTRADA_OFICIAL, "%H:%M:%S").time()
+                            dt_actual = datetime.combine(ahora.date(), ahora.time())
+                            dt_limite = datetime.combine(ahora.date(), h_limite)
+                            diff = dt_actual - dt_limite
+                            minutos_retardo = max(0, int(diff.total_seconds() / 60))
+                            if minutos_retardo > UMBRAL_RETARDO_MINUTOS:
+                                estatus = "Retardo"
 
-        # --- GUARDAR EN GOOGLE SHEETS ---
-        # Asegúrate de que tu Excel tenga las columnas: Estatus y Min_Retardo
-        nuevo = pd.DataFrame([[data, hora_str, lat_actual, lon_actual, tipo, estatus, minutos_retardo]], 
-                             columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo"])
-        
-        df_final = pd.concat([df_actual, nuevo], ignore_index=True)
-        conn.update(data=df_final)
-        
-        # --- FEEDBACK VISUAL ---
-        st.session_state.ultimo_registro = {"empleado": data, "tipo": tipo, "hora": hora_str}
-        st.toast(f"¡{tipo} registrada correctamente!", icon="🚀")
-        
-        if tipo == "Entrada":
-            if estatus == "Retardo":
-                st.warning(f"Registro guardado como RETARDO ({minutos_retardo} min).")
-            st.balloons()
-        else:
-            st.snow()
-            
-    st.session_state.procesando = False
+                        nuevo = pd.DataFrame([[data, hora_str, lat_actual, lon_actual, tipo, estatus, minutos_retardo]], 
+                                             columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo"])
+                        
+                        df_final = pd.concat([df_actual, nuevo], ignore_index=True)
+                        conn.update(data=df_final)
+                        
+                        st.session_state.ultimo_registro = {"empleado": data, "tipo": tipo, "hora": hora_str}
+                        st.toast(f"¡{tipo} registrada!", icon="🚀")
+                        if tipo == "Entrada": st.balloons() 
+                        else: st.snow()
+                    st.session_state.procesando = False
+
+                # Los botones de abajo NO van dentro de la función (van alineados con 'def')
+                with col1:
+                    st.button("📥 ENTRADA", on_click=registrar, args=("Entrada",), use_container_width=True)
+                with col2:
+                    st.button("📤 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True)
 
 
                 with col1:
@@ -300,34 +289,3 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
