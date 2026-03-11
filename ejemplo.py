@@ -20,6 +20,11 @@ from email.mime.image import MIMEImage
 zona_veracruz = pytz.timezone('America/Mexico_City')
 conn = st.connection("gsheets", type=GSheetsConnection)
 
+# ---------------------------------------------
+HORA_ENTRADA_OFICIAL = "07:00:00" 
+UMBRAL_RETARDO_MINUTOS = 15
+# ----------------------------------------------
+
 OFICINA_LAT = 19.245304  
 OFICINA_LON = -96.174232 
 RADIO_PERMITIDO = 1000   
@@ -262,6 +267,7 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
 
