@@ -195,7 +195,7 @@ if loc:
                 st.subheader(f"Empleado: {data}")
                 col1, col2 = st.columns(2)
 
-                                # --- BUSCA ESTA PARTE EN TU CÓDIGO Y REEMPLÁZALA ---
+         # ---------------
                 def registrar(tipo):
                     # Todo este bloque debe tener 4 espacios de sangría hacia la derecha
                     st.session_state.procesando = True
@@ -228,17 +228,11 @@ if loc:
                         else: st.snow()
                     st.session_state.procesando = False
 
-                # Los botones de abajo NO van dentro de la función (van alineados con 'def')
-                with col1:
-                    st.button("📥 ENTRADA", on_click=registrar, args=("Entrada",), use_container_width=True)
-                with col2:
-                    st.button("📤 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True)
-
 
                 with col1:
-                    st.button("📥 ENTRADA", on_click=registrar, args=("Entrada",), use_container_width=True)
+                    st.button("📥 ENTRADA", on_click=registrar, args=("Entrada",), use_container_width=True, key="reg_entrada")
                 with col2:
-                    st.button("📤 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True)
+                    st.button("📤 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True, key="reg_salida")
                 
                 if st.session_state.ultimo_registro:
                     reg = st.session_state.ultimo_registro
@@ -287,7 +281,7 @@ with st.expander("🔐 Panel de Administración"):
                 # --- PRUEBA DE CORREO ---
                 st.divider()
                 st.subheader("📧 Prueba de Sistema de Correo")
-                if st.button("Mandar Reporte de HOY por Correo"):
+                if st.button("Mandar Reporte de HOY por Correo", key="btn_test_mail"):
                     with st.spinner("Enviando..."):
                         resultado_envio = enviar_reporte_semanal(df_dia)
                         if resultado_envio is True:
@@ -296,4 +290,5 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
