@@ -104,7 +104,7 @@ def enviar_reporte_semanal(df):
             alerta_html += "</ul></div>"
 
         msg = MIMEMultipart()
-        msg['Subject'] = f"📊 Reporte Nómina y Observaciones - {hoy.strftime('%d/%m/%Y')}"
+        msg['Subject'] = f"📊 Reporte de Asistencia del personal TRV - {hoy.strftime('%d/%m/%Y')}"
         msg.attach(MIMEText(f"<html><body><h2>Resumen Semanal NEOMOTIC</h2>{alerta_html}<br><p>El CSV adjunto contiene el desglose de Horas Extras y Observaciones.</p></body></html>", 'html'))
 
         # Adjunto CSV
@@ -136,7 +136,7 @@ def calcular_distancia(lat1, lon1, lat2, lon2):
 st.set_page_config(page_title="NEOMOTIC Access", layout="wide")
 ahora = datetime.now(zona_veracruz)
 if 'procesando' not in st.session_state: st.session_state.procesando = False
-st.title("📍 Asistencia Personal TRV")
+st.title("📍 Asistencia de Personal en TRV")
 
 loc = get_geolocation()
 if loc:
@@ -203,4 +203,5 @@ with st.expander("🔐 Administración"):
             pts = df_h.dropna(subset=['Lat', 'Lon']).rename(columns={'Lat':'lat', 'Lon':'lon'})
             st.map(pts if not pts.empty else pd.DataFrame({'lat':[OFICINA_LAT],'lon':[OFICINA_LON]}))
             
+
 
