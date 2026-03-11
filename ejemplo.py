@@ -74,33 +74,40 @@ def enviar_reporte_semanal(df):
         msg['From'], msg['To'] = REMITENTE, ", ".join(DESTINATARIOS)
         msg['Subject'] = f"⚠️ REPORTE CRÍTICO ASISTENCIA - {hoy.strftime('%d/%m/%Y')}"
 
+                # --- LÓGICA DE ALERTAS: IDENTIFICAR QUIÉNES TIENEN >= 3 RETARDOS ---
+        conteo_retardos = df_filtrado[df_filtrado['Estatus'] == "Retardo"].groupby('Empleado').size()
+        empleados_criticos = conteo_retardos[conteo_retardos >= 3]
+
+        # Crear el mensaje de texto para los críticos
+        alerta_texto = ""
+        if not empleados_criticos.empty:
+            alerta_texto = "<p style='color:red; font-weight:bold;'>⚠️ EMPLEADOS CON 3 O MÁS RETARDOS ESTA SEMANA:</p><ul>"
+            for emp, cant in empleados_criticos.items():
+                alerta_texto += f"<li>{emp}: {cant} retardos registrados.</li>"
+            alerta_texto += "</ul>"
+        else:
+            alerta_texto = "<p style='color:green;'>✅ No hay empleados con acumulación crítica de retardos (3+) esta semana.</p>"
+
+        # --- PREPARAR CUERPO DEL CORREO (SIN TABLA) ---
         html_cuerpo = f"""
         <html>
         <body style="font-family: Arial, sans-serif;">
-            <div style="max-width: 600px; border: 2px solid #004a99; padding: 20px;">
-                <h2 style="color: #004a99;">Resumen Semanal de Asistencia</h2>
-                <p>Periodo: <b>{fecha_inicio.strftime('%d/%m/%Y')}</b> al <b>{hoy.strftime('%d/%m/%Y')}</b></p>
+            <div style="max-width: 600px; border: 1px solid #004a99; padding: 20px;">
+                <h2 style="color: #004a99;">Reporte de Asistencia Semanal - TRV</h2>
+                <p>Hola, se adjunta el reporte detallado de asistencia y nómina correspondiente al periodo:</p>
+                <p><b>{fecha_inicio.strftime('%d/%m/%Y')}</b> al <b>{hoy.strftime('%d/%m/%Y')}</b></p>
+                <hr style="border: 0; border-top: 1px solid #eee;">
                 
-                <table style="width: 100%; border-collapse: collapse;">
-                    <thead>
-                        <tr style="background-color: #004a99; color: white;">
-                            <th style="padding: 10px; border: 1px solid #ddd;">Empleado</th>
-                            <th style="padding: 10px; border: 1px solid #ddd;">Entradas</th>
-                            <th style="padding: 10px; border: 1px solid #ddd;">Salidas</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filas_html}
-                    </tbody>
-                </table>
+                {alerta_texto}
                 
-                <p style="margin-top: 20px; font-size: 12px; color: #666;">
-                    * Las filas en <span style="color:red; font-weight:bold;">ROJO</span> indican empleados con 3 o más retardos en la semana.
+                <p style="margin-top: 20px; font-size: 13px;">
+                    El archivo CSV adjunto contiene el desglose completo de horas trabajadas y minutos de retardo por día.
                 </p>
             </div>
         </body>
         </html>
         """
+
         msg.attach(MIMEText(html_cuerpo, 'html'))
 
         # ADJUNTO: Reporte de Nómina con Minutos
@@ -289,3 +296,4 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
