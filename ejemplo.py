@@ -123,7 +123,7 @@ def enviar_reporte_semanal(df):
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(csv_binario)
         encoders.encode_base64(part)
-        part.add_header('Content-Disposition', 'attachment; filename="Reporte_Nomina_TRV.csv"')
+        part.add_header('Content-Disposition', 'attachment; filename="Reporte_Asistencia_TRV.csv"')
         msg.attach(part)
 
         with smtplib.SMTP('smtp.gmail.com', 587) as server:
@@ -290,6 +290,7 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
 
