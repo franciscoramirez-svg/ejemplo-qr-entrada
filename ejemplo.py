@@ -40,15 +40,27 @@ def enviar_reporte_semanal(df):
         
         if df_filtrado.empty: return "Sin registros."
 
-        # Alerta de Retardos Críticos
+        
+               # --- MEJORA VISUAL: LISTA DE RETARDOS EN EL CORREO ---
         conteo = df_filtrado[df_filtrado['Estatus'] == "Retardo"].groupby('Empleado').size()
         criticos = conteo[conteo >= 3]
-        alerta_html = "<p style='color:green;'>✅ Sin alertas de retardos críticos.</p>"
+        
         if not criticos.empty:
-            alerta_html = "<p style='color:red; font-weight:bold;'>⚠️ EMPLEADOS CON 3+ RETARDOS:</p><ul>"
-            for e, c in criticos.items(): alerta_html += f"<li>{e}: {c} retardos</li>"
-            alerta_html += "</ul>"
-
+            alerta_html = """
+            <div style="background-color: #fff0f0; border-left: 5px solid #ff4b4b; padding: 15px; margin: 10px 0;">
+                <p style='color:#d33; font-weight:bold; margin-top:0;'>⚠️ ALERTAS DE RETARDOS CRÍTICOS (3+):</p>
+                <ul style="list-style-type: none; padding-left: 0;">
+            """
+            for e, c in criticos.items():
+                alerta_html += f"<li style='padding: 5px 0; border-bottom: 1px solid #ffebeb;'>❌ <b>{e}</b>: {c} retardos acumulados.</li>"
+            alerta_html += "</ul></div>"
+        else:
+            alerta_html = """
+            <div style="background-color: #f0fff0; border-left: 5px solid #28a745; padding: 15px; margin: 10px 0;">
+                <p style='color:#1e7e34; font-weight:bold; margin:0;'>✅ Personal con asistencia regular. No hay alertas críticas.</p>
+            </div>
+            """
+            
         msg = MIMEMultipart()
         msg['Subject'] = f"📊 Reporte de Asistencia NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
         msg.attach(MIMEText(f"<html><body><h2>Reporte Semanal TRV</h2>{alerta_html}<p>Detalle en adjunto.</p></body></html>", 'html'))
@@ -152,4 +164,5 @@ with st.expander("🔐 Administración"):
         with t3:
             pts = df_h.dropna(subset=['Lat', 'Lon']).rename(columns={'Lat':'lat', 'Lon':'lon'})
             st.map(pts if not pts.empty else pd.DataFrame({'lat':[OFICINA_LAT],'lon':[OFICINA_LON]}))
+
 
