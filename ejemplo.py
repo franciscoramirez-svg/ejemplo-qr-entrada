@@ -20,7 +20,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 # Horarios Oficiales NEOMOTIC
 HORA_ENTRADA_OFICIAL = "07:00:00" 
-HORA_SALIDA_OFICIAL = "17:00:00" # 5:00 PM
+HORA_SALIDA_OFICIAL = "17:00:00" 
 UMBRAL_RETARDO_MINUTOS = 15
 
 OFICINA_LAT = 19.245304  
@@ -28,7 +28,7 @@ OFICINA_LON = -96.174232
 RADIO_PERMITIDO = 1000   
 TELEFONO_ADMIN_WA = "5212296936270" 
 
-# --- 2. FUNCIÓN DE CORREO CON HORAS EXTRAS ---
+# --- 2. FUNCIÓN DE CORREO CON AUDITORÍA ---
 def enviar_reporte_semanal(df):
     try:
         PASSWORD_APP = st.secrets["EMAIL_PASSWORD"]
@@ -44,52 +44,33 @@ def enviar_reporte_semanal(df):
         if df_filtrado.empty: return "Sin registros."
 
         df_filtrado['Fecha'] = df_filtrado['Hora_dt'].dt.date
-        
-        # Agrupamos datos para identificar entradas y salidas
         nom = df_filtrado.groupby(['Empleado', 'Fecha']).agg(
             Entrada=('Hora_dt', 'min'), 
             Salida=('Hora_dt', 'max'),
-            Registros=('Tipo', 'count'), # Contamos cuántas veces marcó
+            Registros=('Tipo', 'count'),
             Primer_Tipo=('Tipo', 'first'),
-            Ultimo_Tipo=('Tipo', 'last'),
             Min_Retardo=('Min_Retardo', 'sum'), 
             Estatus_Dia=('Estatus', 'first')
         ).reset_index()
 
         def calcular_jornada_detallada(row):
-            total_h = 0.0
-            extras = 0.0
-            obs = "OK"
-            
-            # Caso 1: Solo marcó una vez (Olvidó el otro registro)
+            total_h, extras, obs = 0.0, 0.0, "OK"
             if row['Registros'] == 1:
-                if row['Primer_Tipo'] == 'Entrada':
-                    obs = "⚠️ Olvidó marcar SALIDA"
-                else:
-                    obs = "⚠️ Olvidó marcar ENTRADA"
-            
-            # Caso 2: Marcó Entrada y Salida (Registro completo)
+                obs = "⚠️ Olvidó marcar SALIDA" if row['Primer_Tipo'] == 'Entrada' else "⚠️ Olvidó marcar ENTRADA"
             elif row['Entrada'] != row['Salida']:
                 total_h = round((row['Salida'] - row['Entrada']).total_seconds()/3600, 2)
-                
-                # Horas Extras (Después de las 5:00 PM)
                 h_sal_ofic = datetime.combine(row['Salida'].date(), datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()).replace(tzinfo=zona_veracruz)
                 salida_real = row['Salida'].replace(tzinfo=zona_veracruz)
-                
                 if salida_real > h_sal_ofic:
                     extras = round((salida_real - h_sal_ofic).total_seconds()/3600, 2)
                     obs = "CON HORAS EXTRAS"
-            
             return pd.Series([total_h, extras, obs])
 
-        # Aplicamos la nueva lógica
         nom[['Total_Horas', 'Horas_Extras', 'Observaciones']] = nom.apply(calcular_jornada_detallada, axis=1)
 
-        # --- PREPARAR CORREO ---
-        conteo_retardos = df_filtrado[df_filtrado['Estatus'] == "Retardo"].groupby('Empleado').size()
-        criticos = conteo_retardos[conteo_retardos >= 3]
-        
-        # Resumen de incidencias (olvidos) para el cuerpo del correo
+        # Diseño del Correo
+        conteo_r = df_filtrado[df_filtrado['Estatus'] == "Retardo"].groupby('Empleado').size()
+        criticos = conteo_r[conteo_r >= 3]
         olvidos = nom[nom['Observaciones'].str.contains("⚠️")]
         
         alerta_html = ""
@@ -97,23 +78,19 @@ def enviar_reporte_semanal(df):
             alerta_html += "<div style='background:#fff0f0;padding:10px;border-left:5px solid red;'><b>⚠️ RETARDOS CRÍTICOS:</b><ul>"
             for e, c in criticos.items(): alerta_html += f"<li>{e}: {c} retardos</li>"
             alerta_html += "</ul></div><br>"
-            
         if not olvidos.empty:
             alerta_html += "<div style='background:#fff3cd;padding:10px;border-left:5px solid #ffc107;'><b>🔔 REGISTROS INCOMPLETOS:</b><ul>"
             for _, r in olvidos.iterrows(): alerta_html += f"<li>{r['Empleado']} ({r['Fecha']}): {r['Observaciones']}</li>"
             alerta_html += "</ul></div>"
 
         msg = MIMEMultipart()
-        msg['Subject'] = f"📊 Reporte de Asistencia del personal TRV - {hoy.strftime('%d/%m/%Y')}"
-        msg.attach(MIMEText(f"<html><body><h2>Resumen Semanal NEOMOTIC</h2>{alerta_html}<br><p>El CSV adjunto contiene el desglose de Horas Extras y Observaciones.</p></body></html>", 'html'))
+        msg['Subject'] = f"📊 Reporte Nómina y Observaciones - {hoy.strftime('%d/%m/%Y')}"
+        msg.attach(MIMEText(f"<html><body><h2>Resumen Semanal NEOMOTIC</h2>{alerta_html}<br><p>Detalle en el CSV adjunto.</p></body></html>", 'html'))
 
-        # Adjunto CSV
         csv_name = f"REPORTE_ASISTENCIA_TRV_{hoy.strftime('%d_%m_%Y')}.csv"
-        # Limpiamos columnas temporales antes de exportar
-        csv_data = nom[['Empleado', 'Fecha', 'Entrada', 'Salida', 'Total_Horas', 'Horas_Extras', 'Min_Retardo', 'Estatus_Dia', 'Observaciones']]
-        
+        csv_final = nom[['Empleado', 'Fecha', 'Entrada', 'Salida', 'Total_Horas', 'Horas_Extras', 'Min_Retardo', 'Estatus_Dia', 'Observaciones']]
         part = MIMEBase('application', 'octet-stream')
-        part.set_payload(csv_data.to_csv(index=False).encode('utf-8'))
+        part.set_payload(csv_final.to_csv(index=False).encode('utf-8'))
         encoders.encode_base64(part)
         part.add_header('Content-Disposition', f'attachment; filename="{csv_name}"')
         msg.attach(part)
@@ -125,7 +102,6 @@ def enviar_reporte_semanal(df):
         return True
     except Exception as e: return str(e)
 
-
 # --- 3. LÓGICA DE DISTANCIA ---
 def calcular_distancia(lat1, lon1, lat2, lon2):
     lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
@@ -136,7 +112,7 @@ def calcular_distancia(lat1, lon1, lat2, lon2):
 st.set_page_config(page_title="NEOMOTIC Access", layout="wide")
 ahora = datetime.now(zona_veracruz)
 if 'procesando' not in st.session_state: st.session_state.procesando = False
-st.title("📍 Asistencia de Personal en TRV")
+st.title("📍 Asistencia Personal TRV")
 
 loc = get_geolocation()
 if loc:
@@ -162,9 +138,16 @@ if loc:
                             diff = datetime.combine(ahora.date(), ahora.time()) - datetime.combine(ahora.date(), h_lim)
                             min_r = max(0, int(diff.total_seconds() / 60))
                             if min_r > UMBRAL_RETARDO_MINUTOS: est = "Retardo"
-                        nuevo = pd.DataFrame([[data, ahora.strftime("%d/%m/%Y %H:%M:%S"), lat_act, lon_act, tipo, est, min_r]], columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo"])
-                        conn.update(data=pd.concat([df_act, nuevo], ignore_index=True))
-                        st.balloons() if tipo == "Entrada" else st.snow()
+                        
+                        nuevo = pd.DataFrame([[data, ahora.strftime("%d/%m/%Y %H:%M:%S"), lat_act, lon_act, tipo, est, min_r]], 
+                                             columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo"])
+                        
+                        # --- LIMPIEZA DE CÓDIGO EN PANTALLA ---
+                        _ = conn.update(data=pd.concat([df_act, nuevo], ignore_index=True))
+                        
+                        st.toast(f"¡{tipo} registrada!", icon="✅")
+                        if tipo == "Entrada": st.balloons()
+                        else: st.snow()
                     st.session_state.procesando = False
 
                 st.subheader(f"Empleado: {data}")
@@ -190,7 +173,7 @@ with st.expander("🔐 Administración"):
             if st.button("📧 Enviar Reporte de Prueba Hoy", key="btn_mail"):
                 with st.spinner("Enviando..."):
                     res = enviar_reporte_semanal(df_h)
-                    if res is True: st.success("✅ Enviado")
+                    if res is True: st.success("✅ Enviado con éxito.")
                     else: st.error(res)
         with t2:
             if lista_m:
@@ -202,6 +185,3 @@ with st.expander("🔐 Administración"):
         with t3:
             pts = df_h.dropna(subset=['Lat', 'Lon']).rename(columns={'Lat':'lat', 'Lon':'lon'})
             st.map(pts if not pts.empty else pd.DataFrame({'lat':[OFICINA_LAT],'lon':[OFICINA_LON]}))
-            
-
-
