@@ -138,7 +138,18 @@ with st.expander("🔐 Administración"):
             if lista_m:
                 llegaron = df_h[df_h['Tipo'] == 'Entrada']['Empleado'].unique()
                 faltan = [e for e in lista_m if e not in llegaron]
-                st.error(f"Faltan {len(faltan)}: " + ", ".join(faltan)) if faltan else st.success("¡Completos!")
+                
+                if faltan:
+                    st.error(f"⚠️ Faltan {len(faltan)} personas por registrar entrada:")
+                    # Mostramos la lista de nombres uno por uno para que sea más legible
+                    for persona in faltan:
+                        st.write(f"❌ {persona}")
+                else:
+                    st.success("✅ ¡Personal completo! Todos han registrado su entrada hoy.")
+            else:
+                st.info("ℹ️ No hay nombres en la pestaña 'Empleados' de tu Google Sheet.")
+
         with t3:
             pts = df_h.dropna(subset=['Lat', 'Lon']).rename(columns={'Lat':'lat', 'Lon':'lon'})
             st.map(pts if not pts.empty else pd.DataFrame({'lat':[OFICINA_LAT],'lon':[OFICINA_LON]}))
+
