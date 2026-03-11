@@ -42,63 +42,87 @@ def enviar_reporte_semanal(df):
         
         if df_filtrado.empty: return "Sin registros."
 
-        # --- LOGICA DE NÓMINA: CALCULAR HORAS POR DÍA ---
-        df_filtrado['Fecha'] = df_filtrado['Hora_dt'].dt.date
+        # --- LÓGICA DE ALERTAS: CONTAR RETARDOS ---
+        # Filtramos solo las entradas que fueron marcadas como "Retardo"
+        conteo_retardos = df_filtrado[df_filtrado['Estatus'] == "Retardo"].groupby('Empleado').size()
         
-        # Agrupamos por Empleado y Fecha para hallar Entrada (mín) y Salida (máx)
-        nomina = df_filtrado.groupby(['Empleado', 'Fecha']).agg(
-            Entrada=('Hora_dt', 'min'),
-            Salida=('Hora_dt', 'max')
-        ).reset_index()
-
-        # Calculamos la diferencia en horas
-        def calcular_horas(row):
-            if row['Entrada'] != row['Salida']:
-                diff = row['Salida'] - row['Entrada']
-                return round(diff.total_seconds() / 3600, 2)
-            return 0.0
-
-        nomina['Total_Horas_Dia'] = nomina.apply(calcular_horas, axis=1)
-        
-        # Formateamos las horas para que se vean bien en Excel (HH:MM:SS)
-        nomina['Entrada'] = nomina['Entrada'].dt.strftime('%H:%M:%S')
-        nomina['Salida'] = nomina['Salida'].dt.strftime('%H:%M:%S')
-
-        # --- PREPARAR CORREO ---
+        # --- PREPARAR RESUMEN HTML CON COLORES ---
         resumen = df_filtrado.groupby(['Empleado', 'Tipo']).size().unstack(fill_value=0)
-        resumen_html = resumen.to_html(border=1)
+        
+        # Creamos la tabla HTML manualmente para meter el estilo
+        filas_html = ""
+        for emp, row in resumen.iterrows():
+            num_retardos = conteo_retardos.get(emp, 0)
+            # Si tiene más de 3 retardos, ponemos el fondo de la fila en rojo claro
+            estilo_fila = 'style="background-color: #ffcccc;"' if num_retardos >= 3 else ""
+            alerta_txt = f" <br><span style='color:red; font-size:10px;'>⚠️ {num_retardos} Retardos</span>" if num_retardos >= 3 else ""
+            
+            filas_html += f"""
+            <tr {estilo_fila}>
+                <td style="padding: 8px; border: 1px solid #ddd;">{emp}{alerta_txt}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align:center;">{row.get('Entrada', 0)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align:center;">{row.get('Salida', 0)}</td>
+            </tr>
+            """
 
         msg = MIMEMultipart("alternative")
         msg['From'], msg['To'] = REMITENTE, ", ".join(DESTINATARIOS)
-        msg['Subject'] = f" LISTA DE ASISTENCIA SEMANAL TRV - {hoy.strftime('%d/%m/%Y')}"
+        msg['Subject'] = f"⚠️ REPORTE CRÍTICO ASISTENCIA - {hoy.strftime('%d/%m/%Y')}"
 
         html_cuerpo = f"""
-        <div style="font-family: Arial; max-width: 600px; border: 1px solid #004a99; padding: 20px;">
-            <h2 style="color: #004a99;">Reporte de Horas para Nómina</h2>
-            <p>Periodo: {fecha_inicio.strftime('%d/%m/%Y')} al {hoy.strftime('%d/%m/%Y')}</p>
-            {resumen_html}
-            <p><b>Nota:</b> El archivo adjunto contiene el cálculo de horas diarias por empleado.</p>
-        </div>
+        <html>
+        <body style="font-family: Arial, sans-serif;">
+            <div style="max-width: 600px; border: 2px solid #004a99; padding: 20px;">
+                <h2 style="color: #004a99;">Resumen Semanal de Asistencia</h2>
+                <p>Periodo: <b>{fecha_inicio.strftime('%d/%m/%Y')}</b> al <b>{hoy.strftime('%d/%m/%Y')}</b></p>
+                
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background-color: #004a99; color: white;">
+                            <th style="padding: 10px; border: 1px solid #ddd;">Empleado</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">Entradas</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">Salidas</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {filas_html}
+                    </tbody>
+                </table>
+                
+                <p style="margin-top: 20px; font-size: 12px; color: #666;">
+                    * Las filas en <span style="color:red; font-weight:bold;">ROJO</span> indican empleados con 3 o más retardos en la semana.
+                </p>
+            </div>
+        </body>
+        </html>
         """
         msg.attach(MIMEText(html_cuerpo, 'html'))
 
-        # ADJUNTO: Reporte de Nómina con Horas
+        # ADJUNTO: Reporte de Nómina con Minutos
+        # (Aquí usamos la lógica de la Parte 2 que ya calculaba horas)
+        df_filtrado['Fecha'] = df_filtrado['Hora_dt'].dt.date
+        nomina = df_filtrado.groupby(['Empleado', 'Fecha']).agg(
+            Entrada=('Hora_dt', 'min'),
+            Salida=('Hora_dt', 'max'),
+            Minutos_Retardo=('Min_Retardo', 'sum')
+        ).reset_index()
+        
         csv_binario = nomina.to_csv(index=False).encode('utf-8')
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(csv_binario)
         encoders.encode_base64(part)
-        part.add_header('Content-Disposition', 'attachment; filename="Nomina_Asistencia_TRV.csv"')
+        part.add_header('Content-Disposition', 'attachment; filename="Reporte_Nomina_TRV.csv"')
         msg.attach(part)
 
         with smtplib.SMTP('smtp.gmail.com', 587) as server:
             server.starttls()
             server.login(REMITENTE, PASSWORD_APP)
             server.sendmail(REMITENTE, DESTINATARIOS, msg.as_string())
-            
         return True 
 
     except Exception as e:
-        return f"Error en nómina: {str(e)}"
+        return f"Error en reporte: {str(e)}"
+
 
 
 # --------------------
@@ -238,6 +262,7 @@ with st.expander("🔐 Panel de Administración"):
                             st.error(f"Error: {resultado_envio}")
             else:
                 st.info("Sin registros hoy.")
+
 
 
 
