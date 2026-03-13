@@ -98,7 +98,7 @@ def enviar_reporte_semanal(df):
             alerta_html += "</ul></div>"
 
         msg = MIMEMultipart()
-        msg['Subject'] = f"📊 Reporte Nómina NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
+        msg['Subject'] = f"📊 Reporte de Asistencia de Personal TRV - {hoy.strftime('%d/%m/%Y')}"
         msg.attach(MIMEText(f"<html><body><h2>Resumen Semanal</h2>{alerta_html}<p>Adjunto encontrarás el detalle de horas y extras.</p></body></html>", 'html'))
 
         csv_name = f"REPORTE_ASISTENCIA_{hoy.strftime('%d_%m_%Y')}.csv"
@@ -126,7 +126,7 @@ def calcular_distancia(lat1, lon1, lat2, lon2):
 st.set_page_config(page_title="NEOMOTIC Access", layout="wide")
 ahora = datetime.now(zona_veracruz)
 if 'procesando' not in st.session_state: st.session_state.procesando = False
-st.title("📍 Asistencia Personal TRV")
+st.title("📍 Asistencia de Personal TRV")
 
 loc = get_geolocation()
 if loc:
