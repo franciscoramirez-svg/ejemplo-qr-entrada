@@ -127,7 +127,7 @@ if loc:
             data, _, _ = cv2.QRCodeDetector().detectAndDecode(img)
             if data:
                 df_act = conn.read(ttl=0)
-                                def registrar(tipo):
+            def registrar(tipo):
                     st.session_state.procesando = True
                     ult_reg = df_act[df_act['Empleado'] == data].tail(1)
                     
@@ -136,42 +136,45 @@ if loc:
                     else:
                         est, min_r = "A Tiempo", 0
                         
-                        # --- LÓGICA DE ESTATUS EN TIEMPO REAL ---
+                        # --- LÓGICA DE ENTRADA ---
                         if tipo == "Entrada":
                             h_lim = datetime.strptime(HORA_ENTRADA_OFICIAL, "%H:%M:%S").time()
                             diff = datetime.combine(ahora.date(), ahora.time()) - datetime.combine(ahora.date(), h_lim)
                             min_r = max(0, int(diff.total_seconds() / 60))
                             if min_r > UMBRAL_RETARDO_MINUTOS: est = "Retardo"
                         
+                        # --- LÓGICA DE SALIDA CON ALERTA ROJA ---
                         elif tipo == "Salida":
-                            # 1. Verificamos si es después de la hora de salida
-                            h_sal = datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()
-                            if ahora.time() > h_sal:
-                                # 2. Consultamos la lista de permisos (df_empleados ya se carga en el Panel Admin o puedes cargarla aquí)
+                            h_sal_limite = datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()
+                            if ahora.time() > h_sal_limite:
                                 try:
-                                    df_m = conn.read(worksheet="Empleados", ttl=0)
-                                    permiso = df_m.loc[df_m['Nombre'] == data, 'Autoriza_Extra']
-                                    autorizado = (permiso.values == "SÍ") if not permiso.empty else False
-                                    est = "Salida Autorizada" if autorizado else "Salida NO Autorizada"
+                                    # Consultamos permisos en tiempo real
+                                    df_permisos = conn.read(worksheet="Empleados", ttl=0)
+                                    autorizado = (df_permisos.loc[df_permisos['Nombre'] == data, 'Autoriza_Extra'].values == "SÍ")
+                                    est = "Salida Autorizada" if autorizado else "SALIDA NO AUTORIZADA"
                                 except:
-                                    est = "Salida (Sin validar permiso)"
+                                    est = "Salida (Error validación)"
                             else:
-                                est = "Salida Normal"
+                                est = "Salida a Tiempo"
 
+                        # Registro en GSheets
                         nuevo = pd.DataFrame([[data, ahora.strftime("%d/%m/%Y %H:%M:%S"), lat_act, lon_act, tipo, est, min_r]], 
                                              columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo"])
-                        
                         _ = conn.update(data=pd.concat([df_act, nuevo], ignore_index=True))
                         
-                        # Mensaje visual dinámico
-                        if est == "Salida NO Autorizada":
-                            st.warning(f"⚠️ {tipo} registrada: {est}", icon="🚨")
+                        # --- ALERTAS VISUALES ---
+                        if est == "SALIDA NO AUTORIZADA":
+                            st.error(f"🚨 ATENCIÓN: {data}, tu salida fuera de horario NO está autorizada para tiempo extra.")
+                            st.snow() # Un toque de efecto visual
+                        elif est == "Retardo":
+                            st.warning(f"⏳ Entrada registrada con {min_r} minutos de retardo.")
                         else:
-                            st.toast(f"¡{tipo} registrada! ({est})", icon="✅")
+                            st.success(f"✅ {tipo} registrada correctamente: {est}")
+                            if tipo == "Entrada": st.balloons()
+                            else: st.snow()
                             
-                        if tipo == "Entrada": st.balloons()
-                        else: st.snow()
                     st.session_state.procesando = False
+
 
                 st.subheader(f"Empleado: {data}")
                 c1, c2 = st.columns(2)
