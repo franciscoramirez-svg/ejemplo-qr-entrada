@@ -108,7 +108,7 @@ def enviar_reporte_semanal(df):
         csv_final = csv_final.sort_values(by=['Empleado', 'Fecha'], ascending=[True, True])
 
         msg = MIMEMultipart()
-        msg['Subject'] = f"📊 REPORTE NÓMINA NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
+        msg['Subject'] = f"📊 REPORTE DE ASISTENCIA DE PERSONAL TRV - {hoy.strftime('%d/%m/%Y')}"
         cuerpo = f"<html><body style='font-family:Arial;padding:20px;'><div style='background:white;padding:20px;border-radius:10px;max-width:600px;margin:auto;'><h2>Resumen Semanal</h2>{alerta_html}<br><p style='font-size:12px;color:#7f8c8d;'>Detalle completo adjunto en CSV (Ordenado A-Z).</p></div></body></html>"
         msg.attach(MIMEText(cuerpo, 'html'))
 
