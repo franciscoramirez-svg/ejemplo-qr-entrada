@@ -13,6 +13,8 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 import urllib.parse
+import qrcode
+from io import BytesIO
 
 # --- 1. CONFIGURACIÓN INICIAL ---
 zona_veracruz = pytz.timezone('America/Mexico_City')
@@ -25,9 +27,8 @@ UMBRAL_RETARDO_MINUTOS = 15
 OFICINA_LAT = 19.245304  
 OFICINA_LON = -96.174232 
 RADIO_PERMITIDO = 1000   
-TELEFONO_ADMIN_WA = "5212296936270" 
 
-# --- 2. FUNCIÓN DE CORREO CON DISEÑO EJECUTIVO ---
+# --- 2. FUNCIÓN DE CORREO CON JUSTIFICACIONES ---
 def enviar_reporte_semanal(df):
     try:
         PASSWORD_APP = st.secrets["EMAIL_PASSWORD"]
@@ -45,16 +46,18 @@ def enviar_reporte_semanal(df):
         df_temp['Hora_dt'] = pd.to_datetime(df_temp['Hora'], dayfirst=True, errors='coerce')
         df_filtrado = df_temp[df_temp['Hora_dt'].dt.date >= fecha_ini].copy()
         
-        if df_filtrado.empty: return "Sin registros para el reporte."
+        if df_filtrado.empty: return "Sin registros."
 
         df_filtrado['Fecha'] = df_filtrado['Hora_dt'].dt.date
+        # Agrupamos incluyendo la columna Justificacion
         nom = df_filtrado.groupby(['Empleado', 'Fecha']).agg(
             Entrada=('Hora_dt', 'min'), 
             Salida=('Hora_dt', 'max'),
             Registros=('Tipo', 'count'),
             Primer_Tipo=('Tipo', 'first'),
             Min_Retardo=('Min_Retardo', 'sum'), 
-            Estatus_Dia=('Estatus', 'first')
+            Estatus_Dia=('Estatus', 'first'),
+            Justificacion=('Justificacion', 'first')
         ).reset_index()
 
         def calcular_jornada_detallada(row):
@@ -69,9 +72,12 @@ def enviar_reporte_semanal(df):
                 if salida_real > h_sal_ofic:
                     permiso = df_maestra.loc[df_maestra['Nombre'] == row['Empleado'], 'Autoriza_Extra']
                     autorizado = (permiso.values == "SÍ") if not permiso.empty else False
-                    if autorizado:
+                    # Si escribiste algo en la celda 'Justificacion' del Sheets, se autoriza el pago
+                    tiene_just = pd.notna(row['Justificacion']) and str(row['Justificacion']).strip() != ""
+
+                    if autorizado or tiene_just:
                         extras = round((salida_real - h_sal_ofic).total_seconds()/3600, 2)
-                        obs = "CON HORAS EXTRAS"
+                        obs = f"CON HORAS EXTRAS (Justificado: {row['Justificacion']})" if tiene_just else "CON HORAS EXTRAS"
                     else:
                         extras = 0.0
                         obs = "⚠️ SALIDA TARDÍA NO AUTORIZADA"
@@ -79,45 +85,20 @@ def enviar_reporte_semanal(df):
 
         nom[['Total_Horas', 'Horas_Extras', 'Observaciones']] = nom.apply(calcular_jornada_detallada, axis=1)
 
-        # --- DISEÑO DE ALERTAS VISUALES ---
-        retardos_graves = df_filtrado[df_filtrado['Estatus'] == "RETARDO CRÍTICO"]
-        conteo_r = df_filtrado[df_filtrado['Estatus'] == "Retardo"].groupby('Empleado').size()
-        reincidentes = conteo_r[conteo_r >= 3]
-        salidas_no_auth = df_filtrado[df_filtrado['Estatus'] == "SALIDA NO AUTORIZADA"]
-        olvidos = nom[nom['Observaciones'].str.contains("⚠️")]
-
-        alerta_html = ""
-        if not retardos_graves.empty:
-            alerta_html += "<div style='background:#d32f2f;padding:15px;border-radius:8px;color:white;margin-bottom:10px;'><h3>🚨 RETARDOS CRÍTICOS (>30 MIN)</h3><ul>"
-            for _, r in retardos_graves.iterrows(): alerta_html += f"<li><b>{r['Empleado']}</b>: {r['Min_Retardo']} min ({r['Hora']})</li>"
-            alerta_html += "</ul></div>"
-
-        if not reincidentes.empty or not salidas_no_auth.empty:
-            alerta_html += "<div style='background:#fff9c4;padding:15px;border-left:8px solid #fbc02d;border-radius:4px;color:#333;margin-bottom:10px;'><h3 style='color:#856404;'>⚠️ INCIDENCIAS SEMANALES</h3><ul>"
-            for e, c in reincidentes.items(): alerta_html += f"<li><b>{e}</b>: {c} retardos acumulados.</li>"
-            for _, s in salidas_no_auth.iterrows(): alerta_html += f"<li><b>{s['Empleado']}</b>: Salida NO autorizada ({s['Hora']}).</li>"
-            alerta_html += "</ul></div>"
-
-        if not olvidos.empty:
-            alerta_html += "<div style='background:#ffe0b2;padding:10px;border-left:8px solid #fb8c00;border-radius:4px;color:#333;'><h3>🔔 REGISTROS INCOMPLETOS</h3><ul>"
-            for _, r in olvidos.iterrows(): alerta_html += f"<li>{r['Empleado']} ({r['Fecha']}): {r['Observaciones']}</li>"
-            alerta_html += "</ul></div>"
-
-        # --- ORDENAR Y PREPARAR CSV ---
-        csv_final = nom[['Empleado', 'Fecha', 'Entrada', 'Salida', 'Total_Horas', 'Horas_Extras', 'Min_Retardo', 'Estatus_Dia', 'Observaciones']]
-        csv_final = csv_final.sort_values(by=['Empleado', 'Fecha'], ascending=[True, True])
+        # Ordenar A-Z y preparar CSV
+        csv_final = nom[['Empleado', 'Fecha', 'Entrada', 'Salida', 'Total_Horas', 'Horas_Extras', 'Min_Retardo', 'Estatus_Dia', 'Observaciones', 'Justificacion']]
+        csv_final = csv_final.sort_values(by=['Empleado', 'Fecha'])
 
         msg = MIMEMultipart()
-        msg['Subject'] = f"📊 REPORTE DE ASISTENCIA DE PERSONAL TRV - {hoy.strftime('%d/%m/%Y')}"
-        cuerpo = f"<html><body style='font-family:Arial;padding:20px;'><div style='background:white;padding:20px;border-radius:10px;max-width:600px;margin:auto;'><h2>Resumen Semanal</h2>{alerta_html}<br><p style='font-size:12px;color:#7f8c8d;'>Detalle completo adjunto en CSV (Ordenado A-Z).</p></div></body></html>"
+        msg['Subject'] = f"📊 REPORTE NÓMINA NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
+        cuerpo = f"<html><body style='font-family:Arial;'><div style='padding:20px;border-radius:10px;max-width:600px;border:1px solid #eee;'><h2>Resumen de Asistencia</h2><p>Reporte generado con validación de permisos y justificaciones manuales.</p></div></body></html>"
         msg.attach(MIMEText(cuerpo, 'html'))
 
-        csv_name = f"REPORTE_{hoy.strftime('%d_%m_%Y')}.csv"
         csv_data = csv_final.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(csv_data)
         encoders.encode_base64(part)
-        part.add_header('Content-Disposition', f'attachment; filename="{csv_name}"')
+        part.add_header('Content-Disposition', f'attachment; filename="REPORTE_{hoy.strftime("%d_%m")}.csv"')
         msg.attach(part)
 
         with smtplib.SMTP('smtp.gmail.com', 587) as s:
@@ -171,21 +152,17 @@ if loc:
                                     df_m = conn.read(worksheet="Empleados", ttl=0)
                                     auth = (df_m.loc[df_m['Nombre'] == data, 'Autoriza_Extra'].values == "SÍ")
                                     est = "Salida Autorizada" if auth else "SALIDA NO AUTORIZADA"
-                                except: est = "Salida (Error validación)"
+                                except: est = "Error Validación"
                             else: est = "Salida a Tiempo"
 
-                        nuevo = pd.DataFrame([[data, ahora.strftime("%d/%m/%Y %H:%M:%S"), lat_act, lon_act, tipo, est, min_r]], 
-                                             columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo"])
+                        # Insertamos fila con columna Justificacion vacía para llenado manual en Sheets
+                        nuevo = pd.DataFrame([[data, ahora.strftime("%d/%m/%Y %H:%M:%S"), lat_act, lon_act, tipo, est, min_r, ""]], 
+                                             columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo", "Justificacion"])
                         _ = conn.update(data=pd.concat([df_act, nuevo], ignore_index=True))
                         
                         if est in ["RETARDO CRÍTICO", "SALIDA NO AUTORIZADA"]:
                             st.error(f"🚨 {data}: {est}. Favor de reportarse.")
-                            st.snow()
-                        elif est == "Retardo": st.warning(f"⏳ {data}: Retardo de {min_r} min.")
-                        else: 
-                            st.success(f"✅ {tipo} OK: {est}")
-                            if tipo == "Entrada": st.balloons()
-                            else: st.snow()
+                        else: st.success(f"✅ {tipo} OK: {est}")
                     st.session_state.procesando = False
 
                 st.subheader(f"Empleado: {data}")
@@ -194,7 +171,7 @@ if loc:
                 c2.button("📤 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True, key="btn_s")
     else: st.error("Fuera de rango.")
 
-# --- 5. PANEL ADMIN CON GENERADOR DE QR ---
+# --- 5. PANEL ADMIN ---
 st.divider()
 with st.expander("🔐 Administración"):
     if st.text_input("Password", type="password", key="p_adm") == "NEOMOTIC2024":
@@ -205,44 +182,22 @@ with st.expander("🔐 Administración"):
         except: lista_m = []
         
         t1, t2, t3, t4 = st.tabs(["📋 Hoy", "🚫 Faltantes", "🗺️ Mapa", "🖨️ Generar QR"])
-        df_a['Hora_dt'] = pd.to_datetime(df_a['Hora'], dayfirst=True, errors='coerce')
-        df_h = df_a[df_a['Hora_dt'].dt.date == ahora.date()]
-
+        
         with t1: 
-            st.dataframe(df_h[['Empleado', 'Hora', 'Tipo', 'Estatus']], use_container_width=True)
-            if st.button("📧 Enviar Reporte Completo"):
+            df_h = df_a[pd.to_datetime(df_a['Hora'], dayfirst=True).dt.date == ahora.date()]
+            st.dataframe(df_h[['Empleado', 'Hora', 'Tipo', 'Estatus', 'Justificacion']], use_container_width=True)
+            if st.button("📧 Enviar Reporte Semanal"):
                 with st.spinner("Enviando..."):
-                    if enviar_reporte_semanal(df_a) is True: st.success("✅ Reporte enviado.")
+                    if enviar_reporte_semanal(df_a) is True: st.success("✅ Enviado.")
                     else: st.error("Error al enviar.")
-        with t2:
-            llegaron = df_h[df_h['Tipo'] == 'Entrada']['Empleado'].unique()
-            faltan = [e for e in lista_m if e not in llegaron]
-            for f in (faltan if faltan else ["¡Completos!"]): st.write(f"❌ {f}" if f != "¡Completos!" else f)
-        with t3:
-            pts = df_h.dropna(subset=['Lat', 'Lon']).rename(columns={'Lat':'lat', 'Lon':'lon'})
-            st.map(pts if not pts.empty else pd.DataFrame({'lat':[OFICINA_LAT],'lon':[OFICINA_LON]}))
         with t4:
-            st.subheader("Generador de QR Digital (Modo Interno)")
-            if lista_m:
-                emp_sel = st.selectbox("Selecciona Empleado para QR:", lista_m)
-                if emp_sel:
-                    import qrcode
-                    from io import BytesIO
-                    from PIL import Image
-
-                    # Generamos el QR internamente
-                    qr = qrcode.QRCode(version=1, box_size=10, border=4)
-                    qr.add_data(emp_sel)
-                    qr.make(fit=True)
-                    
-                    # Creamos la imagen en memoria
-                    img_qr = qr.make_image(fill_color="black", back_color="white")
-                    
-                    # Convertimos a formato que Streamlit entienda
-                    buf = BytesIO()
-                    img_qr.save(buf, format="PNG")
-                    byte_im = buf.getvalue()
-                    
-                    # Mostramos la imagen generada localmente
-                    st.image(byte_im, caption=f"Código QR generado para: {emp_sel}", width=300)
-                    st.success("✅ QR generado internamente (Sin depender de APIs externas)")
+            st.subheader("Generador de QR Nativo")
+            emp_sel = st.selectbox("Selecciona Empleado:", lista_m)
+            if emp_sel:
+                qr = qrcode.QRCode(version=1, box_size=10, border=4)
+                qr.add_data(emp_sel)
+                qr.make(fit=True)
+                img_qr = qr.make_image(fill_color="black", back_color="white")
+                buf = BytesIO()
+                img_qr.save(buf, format="PNG")
+                st.image(buf.getvalue(), caption=f"QR de {emp_sel}", width=250)
