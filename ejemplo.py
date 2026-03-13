@@ -35,7 +35,6 @@ def enviar_reporte_semanal(df):
         hoy = datetime.now(zona_veracruz)
         fecha_ini = (hoy - timedelta(days=7)).date()
         
-        # Carga de validación de permisos (Pestaña Empleados)
         try:
             df_maestra = conn.read(worksheet="Empleados", ttl=0)
         except:
@@ -45,7 +44,7 @@ def enviar_reporte_semanal(df):
         df_temp['Hora_dt'] = pd.to_datetime(df_temp['Hora'], dayfirst=True, errors='coerce')
         df_filtrado = df_temp[df_temp['Hora_dt'].dt.date >= fecha_ini].copy()
         
-        if df_filtrado.empty: return "Sin registros."
+        if df_filtrado.empty: return "Sin registros para el reporte."
 
         df_filtrado['Fecha'] = df_filtrado['Hora_dt'].dt.date
         nom = df_filtrado.groupby(['Empleado', 'Fecha']).agg(
@@ -63,15 +62,12 @@ def enviar_reporte_semanal(df):
                 obs = "⚠️ Olvidó marcar SALIDA" if row['Primer_Tipo'] == 'Entrada' else "⚠️ Olvidó marcar ENTRADA"
             elif row['Entrada'] != row['Salida']:
                 total_h = round((row['Salida'] - row['Entrada']).total_seconds()/3600, 2)
-                
                 h_sal_ofic = datetime.combine(row['Salida'].date(), datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()).replace(tzinfo=zona_veracruz)
                 salida_real = row['Salida'].replace(tzinfo=zona_veracruz)
                 
                 if salida_real > h_sal_ofic:
-                    # Lógica de Validación Maestra
                     permiso = df_maestra.loc[df_maestra['Nombre'] == row['Empleado'], 'Autoriza_Extra']
                     autorizado = (permiso.values == "SÍ") if not permiso.empty else False
-                    
                     if autorizado:
                         extras = round((salida_real - h_sal_ofic).total_seconds()/3600, 2)
                         obs = "CON HORAS EXTRAS"
@@ -82,33 +78,19 @@ def enviar_reporte_semanal(df):
 
         nom[['Total_Horas', 'Horas_Extras', 'Observaciones']] = nom.apply(calcular_jornada_detallada, axis=1)
 
-        # Diseño del Correo
-        conteo_r = df_filtrado[df_filtrado['Estatus'] == "Retardo"].groupby('Empleado').size()
-        criticos = conteo_r[conteo_r >= 3]
-        olvidos = nom[nom['Observaciones'].str.contains("⚠️")]
-        
-        alerta_html = ""
-        if not criticos.empty:
-            alerta_html += "<div style='background:#fff0f0;padding:10px;border-left:5px solid red;'><b>⚠️ RETARDOS CRÍTICOS:</b><ul>"
-            for e, c in criticos.items(): alerta_html += f"<li>{e}: {c} retardos</li>"
-            alerta_html += "</ul></div><br>"
-        if not olvidos.empty:
-            alerta_html += "<div style='background:#fff3cd;padding:10px;border-left:5px solid #ffc107;'><b>🔔 ALERTAS DE JORNADA:</b><ul>"
-            for _, r in olvidos.iterrows(): alerta_html += f"<li>{r['Empleado']} ({r['Fecha']}): {r['Observaciones']}</li>"
-            alerta_html += "</ul></div>"
+        # --- ORDENAR Y PREPARAR CSV ---
+        csv_final = nom[['Empleado', 'Fecha', 'Entrada', 'Salida', 'Total_Horas', 'Horas_Extras', 'Min_Retardo', 'Estatus_Dia', 'Observaciones']]
+        csv_final = csv_final.sort_values(by=['Empleado', 'Fecha'], ascending=[True, True])
 
         msg = MIMEMultipart()
-        msg['Subject'] = f"📊 Reporte de Asistencia de Personal TRV - {hoy.strftime('%d/%m/%Y')}"
-        msg.attach(MIMEText(f"<html><body><h2>Resumen Semanal</h2>{alerta_html}<p>Adjunto encontrarás el detalle de horas y extras.</p></body></html>", 'html'))
+        msg['Subject'] = f"📊 Reporte de Nómina - {hoy.strftime('%d/%m/%Y')}"
+        msg.attach(MIMEText(f"<html><body><h2>Resumen Semanal NEOMOTIC</h2><p>Se adjunta el reporte ordenado por nombre.</p></body></html>", 'html'))
 
-    
-        csv_final = nom[['Empleado', 'Fecha', 'Entrada', 'Salida', 'Total_Horas', 'Horas_Extras', 'Min_Retardo', 'Estatus_Dia', 'Observaciones']]
-        csv_final = csv_final.sort_values(by=['Empleado', 'Fecha'], ascending=[True, True]) 
-
-        csv_name = f"REPORTE_ASISTENCIA_{hoy.strftime('%d_%m_%Y')}.csv"
-        part = MIMEBase('application', 'octet-stream')
-    
+        csv_name = f"REPORTE_{hoy.strftime('%d_%m_%Y')}.csv"
         csv_data = csv_final.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
+        
+        part = MIMEBase('application', 'octet-stream')
+        part.set_payload(csv_data)
         encoders.encode_base64(part)
         part.add_header('Content-Disposition', f'attachment; filename="{csv_name}"')
         msg.attach(part)
@@ -119,6 +101,7 @@ def enviar_reporte_semanal(df):
             s.sendmail(REMITENTE, DESTINATARIOS, msg.as_string())
         return True
     except Exception as e: return str(e)
+
 
 # --- 3. LÓGICA DE DISTANCIA ---
 def calcular_distancia(lat1, lon1, lat2, lon2):
