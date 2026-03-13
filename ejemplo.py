@@ -223,8 +223,13 @@ with st.expander("🔐 Administración"):
             st.map(pts if not pts.empty else pd.DataFrame({'lat':[OFICINA_LAT],'lon':[OFICINA_LON]}))
         with t4:
             st.subheader("Generador de QR Digital")
-            emp_sel = st.selectbox("Selecciona Empleado:", lista_m)
-            if emp_sel:
-                qr_url = f"https://quickchart.io{urllib.parse.quote(emp_sel)}&size=300"
-                st.image(qr_url, caption=f"QR oficial de {emp_sel}", width=250)
-                st.info("💡 Puedes escanear este QR directamente desde la pantalla.")
+            if lista_m:
+                emp_sel = st.selectbox("Selecciona Empleado:", lista_m)
+                if emp_sel:
+                    # Usamos la URL simplificada de QuickChart
+                    nombre_escrita = urllib.parse.quote(emp_sel)
+                    # Cambiamos 'text' por 'chl' que es más compatible con navegadores
+                    qr_url = f"https://quickchart.io{nombre_escrita}"
+                    
+                    # Forzamos la visualización con st.image
+                    st.image(qr_url, caption=f"QR de {emp_sel}", width=300)
