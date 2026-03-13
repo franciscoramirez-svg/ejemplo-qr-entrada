@@ -18,7 +18,7 @@ zona_veracruz = pytz.timezone('America/Mexico_City')
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 HORA_ENTRADA_OFICIAL = "07:00:00" 
-HORA_SALIDA_OFICIAL = "17:00:00" 
+HORA_SALIDA_OFICIAL = "09:00:00" 
 UMBRAL_RETARDO_MINUTOS = 15
 
 OFICINA_LAT = 19.245304  
