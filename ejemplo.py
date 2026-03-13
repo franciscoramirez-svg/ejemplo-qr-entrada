@@ -222,21 +222,16 @@ with st.expander("🔐 Administración"):
             st.map(pts if not pts.empty else pd.DataFrame({'lat':[OFICINA_LAT],'lon':[OFICINA_LON]}))
 
         # --- NUEVA PESTAÑA: GENERADOR DE QR DIGITAL ---
+                # --- PESTAÑA DE GENERACIÓN DE QR (ACTUALIZADA) ---
         with t4:
-            st.subheader("Generador de Código QR")
+            st.subheader("Generador de QR Digital")
             if lista_m:
-                emp_sel = st.selectbox("Selecciona al empleado para ver su QR:", lista_m)
+                emp_sel = st.selectbox("Selecciona Empleado:", lista_m)
                 if emp_sel:
-                    # Generamos la URL del QR usando Google Charts API
-                    # Usamos urllib.parse.quote para manejar espacios y acentos en el nombre
-                    nombre_codificado = urllib.parse.quote(emp_sel)
-                    qr_url = f"https://chart.googleapis.com{nombre_codificado}"
+                    # Usamos QuickChart API (Alternativa moderna a Google Charts)
+                    nombre_encoded = urllib.parse.quote(emp_sel)
+                    # Nueva URL funcional:
+                    qr_url = f"https://quickchart.io{nombre_encoded}&size=300"
                     
-                    c1, c2 = st.columns([1, 2])
-                    with c1:
-                        st.image(qr_url, width=250)
-                    with c2:
-                        st.write(f"### QR Oficial: {emp_sel}")
-                        st.info("Puedes mostrar este código en tu celular para que el empleado lo escanee si no trae su gafete impreso.")
-            else:
-                st.warning("No se encontraron empleados en la pestaña 'Empleados' de Google Sheets.")
+                    st.image(qr_url, caption=f"QR oficial de {emp_sel}", width=250)
+                    st.info("💡 Este código es generado mediante QuickChart y es 100% compatible.")
