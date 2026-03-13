@@ -18,7 +18,7 @@ zona_veracruz = pytz.timezone('America/Mexico_City')
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 HORA_ENTRADA_OFICIAL = "07:00:00" 
-HORA_SALIDA_OFICIAL = "09:00:00" 
+HORA_SALIDA_OFICIAL = "17:00:00" 
 UMBRAL_RETARDO_MINUTOS = 15
 
 OFICINA_LAT = 19.245304  
@@ -26,7 +26,7 @@ OFICINA_LON = -96.174232
 RADIO_PERMITIDO = 1000   
 TELEFONO_ADMIN_WA = "5212296936270" 
 
-# --- 2. FUNCIÓN DE CORREO CON OPCIÓN A (PROFESIONAL) ---
+# --- 2. FUNCIÓN DE CORREO CON ALERTAS CRÍTICAS Y ORDEN ALFABÉTICO ---
 def enviar_reporte_semanal(df):
     try:
         PASSWORD_APP = st.secrets["EMAIL_PASSWORD"]
@@ -78,17 +78,33 @@ def enviar_reporte_semanal(df):
 
         nom[['Total_Horas', 'Horas_Extras', 'Observaciones']] = nom.apply(calcular_jornada_detallada, axis=1)
 
+        # --- LÓGICA DE ALERTAS PARA EL CUERPO DEL CORREO ---
+        retardos_graves = df_filtrado[df_filtrado['Estatus'] == "RETARDO CRÍTICO"]
+        conteo_r = df_filtrado[df_filtrado['Estatus'] == "Retardo"].groupby('Empleado').size()
+        reincidentes = conteo_r[conteo_r >= 3]
+        salidas_no_auth = df_filtrado[df_filtrado['Estatus'] == "SALIDA NO AUTORIZADA"]
+
+        alerta_html = ""
+        if not retardos_graves.empty:
+            alerta_html += "<div style='background:#ff0000;padding:12px;color:white;border-radius:5px;'><b>🚨 RETARDOS CRÍTICOS (>30 MIN):</b><ul>"
+            for _, r in retardos_graves.iterrows(): alerta_html += f"<li>{r['Empleado']}: {r['Min_Retardo']} min ({r['Hora']})</li>"
+            alerta_html += "</ul></div><br>"
+        if not reincidentes.empty or not salidas_no_auth.empty:
+            alerta_html += "<div style='background:#fff3cd;padding:10px;border-left:5px solid #ffc107;'><b>⚠️ INCIDENCIAS DE SEMANA:</b><ul>"
+            for e, c in reincidentes.items(): alerta_html += f"<li>{e}: Acumula {c} retardos normales.</li>"
+            for _, s in salidas_no_auth.iterrows(): alerta_html += f"<li>{s['Empleado']}: Salida NO autorizada ({s['Hora']}).</li>"
+            alerta_html += "</ul></div>"
+
         # --- ORDENAR Y PREPARAR CSV ---
         csv_final = nom[['Empleado', 'Fecha', 'Entrada', 'Salida', 'Total_Horas', 'Horas_Extras', 'Min_Retardo', 'Estatus_Dia', 'Observaciones']]
         csv_final = csv_final.sort_values(by=['Empleado', 'Fecha'], ascending=[True, True])
 
         msg = MIMEMultipart()
-        msg['Subject'] = f"📊 Reporte de Asistencia de Personal TRV - {hoy.strftime('%d/%m/%Y')}"
-        msg.attach(MIMEText(f"<html><body><h2>Resumen Semanal NEOMOTIC</h2><p>Se adjunta el reporte ordenado por nombre.</p></body></html>", 'html'))
+        msg['Subject'] = f"📊 Reporte de Nómina NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
+        msg.attach(MIMEText(f"<html><body><h2>Resumen Semanal</h2>{alerta_html}<p>Detalle adjunto en CSV (Ordenado A-Z).</p></body></html>", 'html'))
 
         csv_name = f"REPORTE_{hoy.strftime('%d_%m_%Y')}.csv"
         csv_data = csv_final.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
-        
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(csv_data)
         encoders.encode_base64(part)
@@ -102,18 +118,17 @@ def enviar_reporte_semanal(df):
         return True
     except Exception as e: return str(e)
 
-
 # --- 3. LÓGICA DE DISTANCIA ---
 def calcular_distancia(lat1, lon1, lat2, lon2):
     lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
     a = sin((lat2-lat1)/2)**2 + cos(lat1) * cos(lat2) * sin((lon2-lon1)/2)**2
     return (2 * asin(sqrt(a))) * 6371000 
 
-# --- 4. INTERFAZ ---
+# --- 4. INTERFAZ Y REGISTRO ---
 st.set_page_config(page_title="NEOMOTIC Access", layout="wide")
 ahora = datetime.now(zona_veracruz)
 if 'procesando' not in st.session_state: st.session_state.procesando = False
-st.title("📍 Asistencia de Personal TRV")
+st.title("📍 Asistencia Personal TRV")
 
 loc = get_geolocation()
 if loc:
@@ -130,52 +145,36 @@ if loc:
                 def registrar(tipo):
                     st.session_state.procesando = True
                     ult_reg = df_act[df_act['Empleado'] == data].tail(1)
-                    
                     if tipo == "Entrada" and not ult_reg.empty and ult_reg['Tipo'].values == "Entrada":
                         st.error(f"⚠️ {data}, no marcaste SALIDA anterior.")
                     else:
                         est, min_r = "A Tiempo", 0
-                        
-                        # --- LÓGICA DE ENTRADA ---
                         if tipo == "Entrada":
                             h_lim = datetime.strptime(HORA_ENTRADA_OFICIAL, "%H:%M:%S").time()
-                            diff = datetime.combine(ahora.date(), ahora.time()) - datetime.combine(ahora.date(), h_lim)
-                            min_r = max(0, int(diff.total_seconds() / 60))
-                            if min_r > UMBRAL_RETARDO_MINUTOS: est = "Retardo"
-                        
-                        # --- LÓGICA DE SALIDA CON ALERTA ROJA ---
+                            diff = (datetime.combine(date.today(), ahora.time()) - datetime.combine(date.today(), h_lim)).total_seconds() / 60
+                            min_r = max(0, int(diff))
+                            if min_r > 30: est = "RETARDO CRÍTICO"
+                            elif min_r > UMBRAL_RETARDO_MINUTOS: est = "Retardo"
                         elif tipo == "Salida":
-                            h_sal_limite = datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()
-                            if ahora.time() > h_sal_limite:
+                            h_sal = datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()
+                            if ahora.time() > h_sal:
                                 try:
-                                    # Consultamos permisos en tiempo real
-                                    df_permisos = conn.read(worksheet="Empleados", ttl=0)
-                                    autorizado = (df_permisos.loc[df_permisos['Nombre'] == data, 'Autoriza_Extra'].values == "SÍ")
-                                    est = "Salida Autorizada" if autorizado else "SALIDA NO AUTORIZADA"
-                                except:
-                                    est = "Salida (Error validación)"
-                            else:
-                                est = "Salida a Tiempo"
+                                    df_m = conn.read(worksheet="Empleados", ttl=0)
+                                    auth = (df_m.loc[df_m['Nombre'] == data, 'Autoriza_Extra'].values == "SÍ")
+                                    est = "Salida Autorizada" if auth else "SALIDA NO AUTORIZADA"
+                                except: est = "Salida (Sin validar)"
+                            else: est = "Salida a Tiempo"
 
-                        # Registro en GSheets
                         nuevo = pd.DataFrame([[data, ahora.strftime("%d/%m/%Y %H:%M:%S"), lat_act, lon_act, tipo, est, min_r]], 
                                              columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo"])
                         _ = conn.update(data=pd.concat([df_act, nuevo], ignore_index=True))
                         
-                        # --- ALERTAS VISUALES ---
-                        if est == "SALIDA NO AUTORIZADA":
-                            st.error(f"🚨 ATENCIÓN: {data}, tu salida fuera de horario NO está autorizada para tiempo extra.")
-                            st.snow() # Un toque de efecto visual
-                        elif est == "Retardo":
-                            st.warning(f"⏳ Entrada registrada con {min_r} minutos de retardo.")
-                        else:
-                            st.success(f"✅ {tipo} registrada correctamente: {est}")
-                            if tipo == "Entrada": st.balloons()
-                            else: st.snow()
-                            
+                        if est in ["RETARDO CRÍTICO", "SALIDA NO AUTORIZADA"]:
+                            st.error(f"🚨 {data}: {est}. Reportarse con admin.")
+                        elif est == "Retardo": st.warning(f"⏳ {data}: Retardo de {min_r} min.")
+                        else: st.success(f"✅ {tipo} OK: {est}")
                     st.session_state.procesando = False
 
-                
                 st.subheader(f"Empleado: {data}")
                 c1, c2 = st.columns(2)
                 c1.button("📥 ENTRADA", on_click=registrar, args=("Entrada",), use_container_width=True, key="btn_e")
@@ -187,11 +186,8 @@ st.divider()
 with st.expander("🔐 Administración"):
     if st.text_input("Password", type="password", key="p_adm") == "NEOMOTIC2024":
         df_a = conn.read(ttl=0)
-        try: 
-            df_empleados = conn.read(worksheet="Empleados", ttl=0)
-            lista_m = df_empleados['Nombre'].tolist()
-        except: 
-            lista_m = []
+        try: lista_m = conn.read(worksheet="Empleados", ttl=0)['Nombre'].tolist()
+        except: lista_m = []
         
         t1, t2, t3 = st.tabs(["📋 Hoy", "🚫 Faltantes", "🗺️ Mapa"])
         df_a['Hora_dt'] = pd.to_datetime(df_a['Hora'], dayfirst=True, errors='coerce')
@@ -199,18 +195,15 @@ with st.expander("🔐 Administración"):
 
         with t1: 
             st.dataframe(df_h[['Empleado', 'Hora', 'Tipo', 'Estatus']], use_container_width=True)
-            if st.button("📧 Enviar Reporte Semanal (Con validación de extras)", key="btn_mail"):
-                with st.spinner("Procesando y validando permisos..."):
-                    res = enviar_reporte_semanal(df_a) # Enviamos el df completo para que filtre los 7 días
-                    if res is True: st.success("✅ Reporte enviado con éxito.")
-                    else: st.error(f"Error: {res}")
+            if st.button("📧 Enviar Reporte Completo"):
+                with st.spinner("Procesando..."):
+                    if enviar_reporte_semanal(df_a) is True: st.success("✅ Enviado.")
+                    else: st.error("Error al enviar.")
         with t2:
-            if lista_m:
-                llegaron = df_h[df_h['Tipo'] == 'Entrada']['Empleado'].unique()
-                faltan = [e for e in lista_m if e not in llegaron]
-                if faltan:
-                    for f in faltan: st.write(f"❌ {f}")
-                else: st.success("¡Completos!")
+            llegaron = df_h[df_h['Tipo'] == 'Entrada']['Empleado'].unique()
+            faltan = [e for e in lista_m if e not in llegaron]
+            for f in (faltan if faltan else ["¡Completos!"]): st.write(f"❌ {f}" if f != "¡Completos!" else f)
         with t3:
             pts = df_h.dropna(subset=['Lat', 'Lon']).rename(columns={'Lat':'lat', 'Lon':'lon'})
             st.map(pts if not pts.empty else pd.DataFrame({'lat':[OFICINA_LAT],'lon':[OFICINA_LON]}))
+
