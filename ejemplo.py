@@ -103,8 +103,8 @@ def enviar_reporte_semanal(df):
 
     
         csv_final = nom[['Empleado', 'Fecha', 'Entrada', 'Salida', 'Total_Horas', 'Horas_Extras', 'Min_Retardo', 'Estatus_Dia', 'Observaciones']]
-        csv_final = csv_final.sort_values(by=['Empleado', 'Fecha']), ascending=[True, True]) # Ordena por nombre y luego por fecha
-        
+        csv_final = csv_final.sort_values(by=['Empleado', 'Fecha'], ascending=[True, True]) 
+
         csv_name = f"REPORTE_ASISTENCIA_{hoy.strftime('%d_%m_%Y')}.csv"
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(csv_final.to_csv(index=False).encode('utf-8')).encode('utf-8-sig'))
