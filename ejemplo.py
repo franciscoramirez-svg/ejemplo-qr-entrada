@@ -69,8 +69,8 @@ def enviar_reporte_semanal(df):
                 salida_real = row['Salida'].replace(tzinfo=zona_veracruz)
                 
                 if salida_real > h_sal_ofic:
-                    permiso = df_maestra.loc[df_maestra['Nombre'] == row['Nombre'], 'Autoriza_Extra'] if 'Nombre' in df_maestra.columns else []
-                    autorizado = (permiso.values == "SÍ") if len(permiso) > 0 else False
+                    permiso = df_maestra.loc[df_maestra['Nombre'] == row['Empleado'], 'Autoriza_Extra']
+                    autorizado = (permiso.values == "SÍ") if not permiso.empty else False
                     tiene_just = pd.notna(row['Justificacion']) and str(row['Justificacion']).strip() != ""
 
                     if autorizado or tiene_just:
@@ -83,13 +83,25 @@ def enviar_reporte_semanal(df):
 
         nom[['Total_Horas', 'Horas_Extras', 'Observaciones']] = nom.apply(calcular_jornada_detallada, axis=1)
 
-        # Preparar CSV ordenado
+        # Diseño del correo (Semáforo de incidencias)
+        retardos_graves = df_filtrado[df_filtrado['Estatus'] == "RETARDO CRÍTICO"]
+        salidas_no_auth = df_filtrado[df_filtrado['Estatus'] == "SALIDA NO AUTORIZADA"]
+        alerta_html = ""
+        if not retardos_graves.empty:
+            alerta_html += "<div style='background:#d32f2f;padding:12px;color:white;border-radius:8px;'><b>🚨 RETARDOS CRÍTICOS (>30 MIN):</b><ul>"
+            for _, r in retardos_graves.iterrows(): alerta_html += f"<li>{r['Empleado']} ({r['Hora']})</li>"
+            alerta_html += "</ul></div><br>"
+        if not salidas_no_auth.empty:
+            alerta_html += "<div style='background:#fff9c4;padding:12px;border-left:8px solid #fbc02d;color:#333;'><b>⚠️ SALIDAS NO AUTORIZADAS:</b><ul>"
+            for _, s in salidas_no_auth.iterrows(): alerta_html += f"<li>{s['Empleado']} ({s['Hora']})</li>"
+            alerta_html += "</ul></div>"
+
         csv_final = nom[['Empleado', 'Fecha', 'Entrada', 'Salida', 'Total_Horas', 'Horas_Extras', 'Min_Retardo', 'Estatus_Dia', 'Observaciones', 'Justificacion']]
-        csv_final = csv_final.sort_values(by=['Empleado', 'Fecha'], ascending=[True, True])
+        csv_final = csv_final.sort_values(by=['Empleado', 'Fecha'])
 
         msg = MIMEMultipart()
-        msg['Subject'] = f"📊 REPORTE NÓMINA NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
-        cuerpo = f"<html><body style='font-family:Arial;'><div style='padding:20px;border-radius:10px;max-width:600px;border:1px solid #eee;'><h2>Resumen Semanal</h2><p>Reporte generado con validación de permisos y justificaciones manuales.</p></div></body></html>"
+        msg['Subject'] = f"📊 REPORTE DE ASISTENCIA DE PERSONAL TRV - {hoy.strftime('%d/%m/%Y')}"
+        cuerpo = f"<html><body style='font-family:Arial;'><div style='padding:20px;border-radius:10px;max-width:600px;border:1px solid #eee;'><h2>Resumen Semanal</h2>{alerta_html}<p>Detalle adjunto en CSV (Ordenado A-Z).</p></div></body></html>"
         msg.attach(MIMEText(cuerpo, 'html'))
 
         csv_data = csv_final.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
@@ -106,7 +118,7 @@ def enviar_reporte_semanal(df):
         return True
     except Exception as e: return str(e)
 
-# --- 3. LÓGICA DE DISTANCIA ---
+# --- 3. DISTANCIA ---
 def calcular_distancia(lat1, lon1, lat2, lon2):
     lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
     a = sin((lat2-lat1)/2)**2 + cos(lat1) * cos(lat2) * sin((lon2-lon1)/2)**2
@@ -157,9 +169,19 @@ if loc:
                                              columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo", "Justificacion"])
                         _ = conn.update(data=pd.concat([df_act, nuevo], ignore_index=True))
                         
+                        # Mensaje de Bienvenida Dinámico
+                        saludo = "¡Buenos días" if ahora.hour < 12 else "¡Buenas tardes"
                         if est in ["RETARDO CRÍTICO", "SALIDA NO AUTORIZADA"]:
                             st.error(f"🚨 {data}: {est}. Favor de reportarse.")
-                        else: st.success(f"✅ {tipo} OK: {est}")
+                        elif est == "Retardo":
+                            st.warning(f"⏳ {data}, registro con {min_r} min de retardo.")
+                        else:
+                            if tipo == "Entrada":
+                                st.success(f"{saludo}, {data}! 👋 Entrada registrada. ¡Que tengas un excelente día!")
+                                st.balloons()
+                            else:
+                                st.success(f"{saludo}, {data}! 👋 Salida registrada. ¡Gracias y buen descanso!")
+                                st.snow()
                     st.session_state.procesando = False
 
                 st.subheader(f"Empleado: {data}")
@@ -179,8 +201,6 @@ with st.expander("🔐 Administración"):
         except: lista_m = []
         
         t1, t2, t3, t4 = st.tabs(["📋 Hoy", "🚫 Faltantes", "🗺️ Mapa", "🖨️ Generar QR"])
-        
-        # FILTRO DE HOY CORREGIDO PARA PESTAÑAS
         df_a['Hora_dt'] = pd.to_datetime(df_a['Hora'], dayfirst=True, errors='coerce')
         df_h = df_a[df_a['Hora_dt'].dt.date == ahora.date()].copy()
 
@@ -190,23 +210,17 @@ with st.expander("🔐 Administración"):
                 with st.spinner("Enviando..."):
                     if enviar_reporte_semanal(df_a) is True: st.success("✅ Enviado.")
                     else: st.error("Error al enviar.")
-        
         with t2:
             if lista_m:
                 llegaron = df_h[df_h['Tipo'] == 'Entrada']['Empleado'].unique()
                 faltan = [e for e in lista_m if e not in llegaron]
-                if faltan:
-                    for f in faltan: st.write(f"❌ {f}")
-                else: st.success("¡Personal completo hoy!")
-            else: st.error("Carga la lista de empleados en Google Sheets.")
-        
+                for f in (faltan if faltan else ["¡Completos!"]): st.write(f"❌ {f}" if f != "¡Completos!" else f)
         with t3:
             pts = df_h.dropna(subset=['Lat', 'Lon']).copy()
             if not pts.empty:
-                pts = pts.rename(columns={'Lat': 'lat', 'Lon': 'lon'}) # st.map requiere lat/lon en minúsculas
+                pts = pts.rename(columns={'Lat': 'lat', 'Lon': 'lon'})
                 st.map(pts)
-            else: st.info("No hay coordenadas registradas hoy.")
-
+            else: st.info("Sin coordenadas hoy.")
         with t4:
             st.subheader("Generador de QR Nativo")
             emp_sel = st.selectbox("Selecciona Empleado:", lista_m)
@@ -214,7 +228,7 @@ with st.expander("🔐 Administración"):
                 qr = qrcode.QRCode(version=1, box_size=10, border=4)
                 qr.add_data(emp_sel)
                 qr.make(fit=True)
-                img_qr = qr.make_image(fill_color="black", back_color="white")
                 buf = BytesIO()
-                img_qr.save(buf, format="PNG")
+                qr.make_image(fill_color="black", back_color="white").save(buf, format="PNG")
                 st.image(buf.getvalue(), caption=f"QR de {emp_sel}", width=250)
+
