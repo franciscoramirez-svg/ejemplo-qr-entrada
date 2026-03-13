@@ -101,9 +101,11 @@ def enviar_reporte_semanal(df):
         msg['Subject'] = f"📊 Reporte de Asistencia de Personal TRV - {hoy.strftime('%d/%m/%Y')}"
         msg.attach(MIMEText(f"<html><body><h2>Resumen Semanal</h2>{alerta_html}<p>Adjunto encontrarás el detalle de horas y extras.</p></body></html>", 'html'))
 
-        csv_name = f"REPORTE_ASISTENCIA_{hoy.strftime('%d_%m_%Y')}.csv"
+    
         csv_final = nom[['Empleado', 'Fecha', 'Entrada', 'Salida', 'Total_Horas', 'Horas_Extras', 'Min_Retardo', 'Estatus_Dia', 'Observaciones']]
-        csv_final = csv_final.sort_values(by=['Empleado', 'Fecha']) # Ordena por nombre y luego por fecha
+        csv_final = csv_final.sort_values(by=['Empleado', 'Fecha']), ascending=[True, True]) # Ordena por nombre y luego por fecha
+        
+        csv_name = f"REPORTE_ASISTENCIA_{hoy.strftime('%d_%m_%Y')}.csv"
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(csv_final.to_csv(index=False).encode('utf-8'))
         encoders.encode_base64(part)
