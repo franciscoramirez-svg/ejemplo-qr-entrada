@@ -127,24 +127,48 @@ if loc:
             data, _, _ = cv2.QRCodeDetector().detectAndDecode(img)
             if data:
                 df_act = conn.read(ttl=0)
-                def registrar(tipo):
+                                def registrar(tipo):
                     st.session_state.procesando = True
                     ult_reg = df_act[df_act['Empleado'] == data].tail(1)
+                    
                     if tipo == "Entrada" and not ult_reg.empty and ult_reg['Tipo'].values == "Entrada":
                         st.error(f"⚠️ {data}, no marcaste SALIDA anterior.")
                     else:
                         est, min_r = "A Tiempo", 0
+                        
+                        # --- LÓGICA DE ESTATUS EN TIEMPO REAL ---
                         if tipo == "Entrada":
                             h_lim = datetime.strptime(HORA_ENTRADA_OFICIAL, "%H:%M:%S").time()
                             diff = datetime.combine(ahora.date(), ahora.time()) - datetime.combine(ahora.date(), h_lim)
                             min_r = max(0, int(diff.total_seconds() / 60))
                             if min_r > UMBRAL_RETARDO_MINUTOS: est = "Retardo"
                         
+                        elif tipo == "Salida":
+                            # 1. Verificamos si es después de la hora de salida
+                            h_sal = datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()
+                            if ahora.time() > h_sal:
+                                # 2. Consultamos la lista de permisos (df_empleados ya se carga en el Panel Admin o puedes cargarla aquí)
+                                try:
+                                    df_m = conn.read(worksheet="Empleados", ttl=0)
+                                    permiso = df_m.loc[df_m['Nombre'] == data, 'Autoriza_Extra']
+                                    autorizado = (permiso.values == "SÍ") if not permiso.empty else False
+                                    est = "Salida Autorizada" if autorizado else "Salida NO Autorizada"
+                                except:
+                                    est = "Salida (Sin validar permiso)"
+                            else:
+                                est = "Salida Normal"
+
                         nuevo = pd.DataFrame([[data, ahora.strftime("%d/%m/%Y %H:%M:%S"), lat_act, lon_act, tipo, est, min_r]], 
                                              columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo"])
                         
                         _ = conn.update(data=pd.concat([df_act, nuevo], ignore_index=True))
-                        st.toast(f"¡{tipo} registrada!", icon="✅")
+                        
+                        # Mensaje visual dinámico
+                        if est == "Salida NO Autorizada":
+                            st.warning(f"⚠️ {tipo} registrada: {est}", icon="🚨")
+                        else:
+                            st.toast(f"¡{tipo} registrada! ({est})", icon="✅")
+                            
                         if tipo == "Entrada": st.balloons()
                         else: st.snow()
                     st.session_state.procesando = False
