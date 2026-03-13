@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from streamlit_js_eval import get_geolocation
 import cv2
 import numpy as np
@@ -12,13 +12,11 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
-import urllib.parse
 
 # --- 1. CONFIGURACIÓN INICIAL ---
 zona_veracruz = pytz.timezone('America/Mexico_City')
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Horarios Oficiales NEOMOTIC
 HORA_ENTRADA_OFICIAL = "07:00:00" 
 HORA_SALIDA_OFICIAL = "17:00:00" 
 UMBRAL_RETARDO_MINUTOS = 15
@@ -28,7 +26,7 @@ OFICINA_LON = -96.174232
 RADIO_PERMITIDO = 1000   
 TELEFONO_ADMIN_WA = "5212296936270" 
 
-# --- 2. FUNCIÓN DE CORREO CON AUDITORÍA ---
+# --- 2. FUNCIÓN DE CORREO CON OPCIÓN A (PROFESIONAL) ---
 def enviar_reporte_semanal(df):
     try:
         PASSWORD_APP = st.secrets["EMAIL_PASSWORD"]
@@ -37,6 +35,12 @@ def enviar_reporte_semanal(df):
         hoy = datetime.now(zona_veracruz)
         fecha_ini = (hoy - timedelta(days=7)).date()
         
+        # Carga de validación de permisos (Pestaña Empleados)
+        try:
+            df_maestra = conn.read(worksheet="Empleados", ttl=0)
+        except:
+            df_maestra = pd.DataFrame(columns=['Nombre', 'Autoriza_Extra'])
+
         df_temp = df.copy()
         df_temp['Hora_dt'] = pd.to_datetime(df_temp['Hora'], dayfirst=True, errors='coerce')
         df_filtrado = df_temp[df_temp['Hora_dt'].dt.date >= fecha_ini].copy()
@@ -59,11 +63,21 @@ def enviar_reporte_semanal(df):
                 obs = "⚠️ Olvidó marcar SALIDA" if row['Primer_Tipo'] == 'Entrada' else "⚠️ Olvidó marcar ENTRADA"
             elif row['Entrada'] != row['Salida']:
                 total_h = round((row['Salida'] - row['Entrada']).total_seconds()/3600, 2)
+                
                 h_sal_ofic = datetime.combine(row['Salida'].date(), datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()).replace(tzinfo=zona_veracruz)
                 salida_real = row['Salida'].replace(tzinfo=zona_veracruz)
+                
                 if salida_real > h_sal_ofic:
-                    extras = round((salida_real - h_sal_ofic).total_seconds()/3600, 2)
-                    obs = "CON HORAS EXTRAS"
+                    # Lógica de Validación Maestra
+                    permiso = df_maestra.loc[df_maestra['Nombre'] == row['Empleado'], 'Autoriza_Extra']
+                    autorizado = (permiso.values == "SÍ") if not permiso.empty else False
+                    
+                    if autorizado:
+                        extras = round((salida_real - h_sal_ofic).total_seconds()/3600, 2)
+                        obs = "CON HORAS EXTRAS"
+                    else:
+                        extras = 0.0
+                        obs = "⚠️ SALIDA TARDÍA NO AUTORIZADA"
             return pd.Series([total_h, extras, obs])
 
         nom[['Total_Horas', 'Horas_Extras', 'Observaciones']] = nom.apply(calcular_jornada_detallada, axis=1)
@@ -79,15 +93,15 @@ def enviar_reporte_semanal(df):
             for e, c in criticos.items(): alerta_html += f"<li>{e}: {c} retardos</li>"
             alerta_html += "</ul></div><br>"
         if not olvidos.empty:
-            alerta_html += "<div style='background:#fff3cd;padding:10px;border-left:5px solid #ffc107;'><b>🔔 REGISTROS INCOMPLETOS:</b><ul>"
+            alerta_html += "<div style='background:#fff3cd;padding:10px;border-left:5px solid #ffc107;'><b>🔔 ALERTAS DE JORNADA:</b><ul>"
             for _, r in olvidos.iterrows(): alerta_html += f"<li>{r['Empleado']} ({r['Fecha']}): {r['Observaciones']}</li>"
             alerta_html += "</ul></div>"
 
         msg = MIMEMultipart()
-        msg['Subject'] = f"📊 Reporte Nómina y Observaciones - {hoy.strftime('%d/%m/%Y')}"
-        msg.attach(MIMEText(f"<html><body><h2>Resumen Semanal NEOMOTIC</h2>{alerta_html}<br><p>Detalle en el CSV adjunto.</p></body></html>", 'html'))
+        msg['Subject'] = f"📊 Reporte Nómina NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
+        msg.attach(MIMEText(f"<html><body><h2>Resumen Semanal</h2>{alerta_html}<p>Adjunto encontrarás el detalle de horas y extras.</p></body></html>", 'html'))
 
-        csv_name = f"REPORTE_ASISTENCIA_TRV_{hoy.strftime('%d_%m_%Y')}.csv"
+        csv_name = f"REPORTE_ASISTENCIA_{hoy.strftime('%d_%m_%Y')}.csv"
         csv_final = nom[['Empleado', 'Fecha', 'Entrada', 'Salida', 'Total_Horas', 'Horas_Extras', 'Min_Retardo', 'Estatus_Dia', 'Observaciones']]
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(csv_final.to_csv(index=False).encode('utf-8'))
@@ -142,9 +156,7 @@ if loc:
                         nuevo = pd.DataFrame([[data, ahora.strftime("%d/%m/%Y %H:%M:%S"), lat_act, lon_act, tipo, est, min_r]], 
                                              columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo"])
                         
-                        # --- LIMPIEZA DE CÓDIGO EN PANTALLA ---
                         _ = conn.update(data=pd.concat([df_act, nuevo], ignore_index=True))
-                        
                         st.toast(f"¡{tipo} registrada!", icon="✅")
                         if tipo == "Entrada": st.balloons()
                         else: st.snow()
@@ -161,8 +173,11 @@ st.divider()
 with st.expander("🔐 Administración"):
     if st.text_input("Password", type="password", key="p_adm") == "NEOMOTIC2024":
         df_a = conn.read(ttl=0)
-        try: lista_m = conn.read(worksheet="Empleados", ttl=0)['Nombre'].tolist()
-        except: lista_m = []
+        try: 
+            df_empleados = conn.read(worksheet="Empleados", ttl=0)
+            lista_m = df_empleados['Nombre'].tolist()
+        except: 
+            lista_m = []
         
         t1, t2, t3 = st.tabs(["📋 Hoy", "🚫 Faltantes", "🗺️ Mapa"])
         df_a['Hora_dt'] = pd.to_datetime(df_a['Hora'], dayfirst=True, errors='coerce')
@@ -170,11 +185,11 @@ with st.expander("🔐 Administración"):
 
         with t1: 
             st.dataframe(df_h[['Empleado', 'Hora', 'Tipo', 'Estatus']], use_container_width=True)
-            if st.button("📧 Enviar Reporte de Prueba Hoy", key="btn_mail"):
-                with st.spinner("Enviando..."):
-                    res = enviar_reporte_semanal(df_h)
-                    if res is True: st.success("✅ Enviado con éxito.")
-                    else: st.error(res)
+            if st.button("📧 Enviar Reporte Semanal (Con validación de extras)", key="btn_mail"):
+                with st.spinner("Procesando y validando permisos..."):
+                    res = enviar_reporte_semanal(df_a) # Enviamos el df completo para que filtre los 7 días
+                    if res is True: st.success("✅ Reporte enviado con éxito.")
+                    else: st.error(f"Error: {res}")
         with t2:
             if lista_m:
                 llegaron = df_h[df_h['Tipo'] == 'Entrada']['Empleado'].unique()
