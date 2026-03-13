@@ -28,7 +28,7 @@ OFICINA_LAT = 19.245304
 OFICINA_LON = -96.174232 
 RADIO_PERMITIDO = 1000   
 
-# --- 2. FUNCIÓN DE CORREO CON JUSTIFICACIONES ---
+# --- 2. FUNCIÓN DE CORREO CON DISEÑO Y JUSTIFICACIÓN ---
 def enviar_reporte_semanal(df):
     try:
         PASSWORD_APP = st.secrets["EMAIL_PASSWORD"]
@@ -46,10 +46,9 @@ def enviar_reporte_semanal(df):
         df_temp['Hora_dt'] = pd.to_datetime(df_temp['Hora'], dayfirst=True, errors='coerce')
         df_filtrado = df_temp[df_temp['Hora_dt'].dt.date >= fecha_ini].copy()
         
-        if df_filtrado.empty: return "Sin registros."
+        if df_filtrado.empty: return "Sin registros para el reporte."
 
         df_filtrado['Fecha'] = df_filtrado['Hora_dt'].dt.date
-        # Agrupamos incluyendo la columna Justificacion
         nom = df_filtrado.groupby(['Empleado', 'Fecha']).agg(
             Entrada=('Hora_dt', 'min'), 
             Salida=('Hora_dt', 'max'),
@@ -70,9 +69,8 @@ def enviar_reporte_semanal(df):
                 salida_real = row['Salida'].replace(tzinfo=zona_veracruz)
                 
                 if salida_real > h_sal_ofic:
-                    permiso = df_maestra.loc[df_maestra['Nombre'] == row['Empleado'], 'Autoriza_Extra']
-                    autorizado = (permiso.values == "SÍ") if not permiso.empty else False
-                    # Si escribiste algo en la celda 'Justificacion' del Sheets, se autoriza el pago
+                    permiso = df_maestra.loc[df_maestra['Nombre'] == row['Nombre'], 'Autoriza_Extra'] if 'Nombre' in df_maestra.columns else []
+                    autorizado = (permiso.values == "SÍ") if len(permiso) > 0 else False
                     tiene_just = pd.notna(row['Justificacion']) and str(row['Justificacion']).strip() != ""
 
                     if autorizado or tiene_just:
@@ -85,13 +83,13 @@ def enviar_reporte_semanal(df):
 
         nom[['Total_Horas', 'Horas_Extras', 'Observaciones']] = nom.apply(calcular_jornada_detallada, axis=1)
 
-        # Ordenar A-Z y preparar CSV
+        # Preparar CSV ordenado
         csv_final = nom[['Empleado', 'Fecha', 'Entrada', 'Salida', 'Total_Horas', 'Horas_Extras', 'Min_Retardo', 'Estatus_Dia', 'Observaciones', 'Justificacion']]
-        csv_final = csv_final.sort_values(by=['Empleado', 'Fecha'])
+        csv_final = csv_final.sort_values(by=['Empleado', 'Fecha'], ascending=[True, True])
 
         msg = MIMEMultipart()
         msg['Subject'] = f"📊 REPORTE NÓMINA NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
-        cuerpo = f"<html><body style='font-family:Arial;'><div style='padding:20px;border-radius:10px;max-width:600px;border:1px solid #eee;'><h2>Resumen de Asistencia</h2><p>Reporte generado con validación de permisos y justificaciones manuales.</p></div></body></html>"
+        cuerpo = f"<html><body style='font-family:Arial;'><div style='padding:20px;border-radius:10px;max-width:600px;border:1px solid #eee;'><h2>Resumen Semanal</h2><p>Reporte generado con validación de permisos y justificaciones manuales.</p></div></body></html>"
         msg.attach(MIMEText(cuerpo, 'html'))
 
         csv_data = csv_final.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
@@ -155,7 +153,6 @@ if loc:
                                 except: est = "Error Validación"
                             else: est = "Salida a Tiempo"
 
-                        # Insertamos fila con columna Justificacion vacía para llenado manual en Sheets
                         nuevo = pd.DataFrame([[data, ahora.strftime("%d/%m/%Y %H:%M:%S"), lat_act, lon_act, tipo, est, min_r, ""]], 
                                              columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo", "Justificacion"])
                         _ = conn.update(data=pd.concat([df_act, nuevo], ignore_index=True))
@@ -183,13 +180,33 @@ with st.expander("🔐 Administración"):
         
         t1, t2, t3, t4 = st.tabs(["📋 Hoy", "🚫 Faltantes", "🗺️ Mapa", "🖨️ Generar QR"])
         
+        # FILTRO DE HOY CORREGIDO PARA PESTAÑAS
+        df_a['Hora_dt'] = pd.to_datetime(df_a['Hora'], dayfirst=True, errors='coerce')
+        df_h = df_a[df_a['Hora_dt'].dt.date == ahora.date()].copy()
+
         with t1: 
-            df_h = df_a[pd.to_datetime(df_a['Hora'], dayfirst=True).dt.date == ahora.date()]
             st.dataframe(df_h[['Empleado', 'Hora', 'Tipo', 'Estatus', 'Justificacion']], use_container_width=True)
             if st.button("📧 Enviar Reporte Semanal"):
                 with st.spinner("Enviando..."):
                     if enviar_reporte_semanal(df_a) is True: st.success("✅ Enviado.")
                     else: st.error("Error al enviar.")
+        
+        with t2:
+            if lista_m:
+                llegaron = df_h[df_h['Tipo'] == 'Entrada']['Empleado'].unique()
+                faltan = [e for e in lista_m if e not in llegaron]
+                if faltan:
+                    for f in faltan: st.write(f"❌ {f}")
+                else: st.success("¡Personal completo hoy!")
+            else: st.error("Carga la lista de empleados en Google Sheets.")
+        
+        with t3:
+            pts = df_h.dropna(subset=['Lat', 'Lon']).copy()
+            if not pts.empty:
+                pts = pts.rename(columns={'Lat': 'lat', 'Lon': 'lon'}) # st.map requiere lat/lon en minúsculas
+                st.map(pts)
+            else: st.info("No hay coordenadas registradas hoy.")
+
         with t4:
             st.subheader("Generador de QR Nativo")
             emp_sel = st.selectbox("Selecciona Empleado:", lista_m)
