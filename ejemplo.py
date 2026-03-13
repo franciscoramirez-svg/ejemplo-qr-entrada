@@ -127,7 +127,7 @@ if loc:
             data, _, _ = cv2.QRCodeDetector().detectAndDecode(img)
             if data:
                 df_act = conn.read(ttl=0)
-            def registrar(tipo):
+                def registrar(tipo):
                     st.session_state.procesando = True
                     ult_reg = df_act[df_act['Empleado'] == data].tail(1)
                     
@@ -175,7 +175,7 @@ if loc:
                             
                     st.session_state.procesando = False
 
-
+                
                 st.subheader(f"Empleado: {data}")
                 c1, c2 = st.columns(2)
                 c1.button("📥 ENTRADA", on_click=registrar, args=("Entrada",), use_container_width=True, key="btn_e")
