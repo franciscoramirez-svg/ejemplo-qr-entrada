@@ -222,14 +222,27 @@ with st.expander("🔐 Administración"):
             pts = df_h.dropna(subset=['Lat', 'Lon']).rename(columns={'Lat':'lat', 'Lon':'lon'})
             st.map(pts if not pts.empty else pd.DataFrame({'lat':[OFICINA_LAT],'lon':[OFICINA_LON]}))
         with t4:
-            st.subheader("Generador de QR Digital")
+            st.subheader("Generador de QR Digital (Modo Interno)")
             if lista_m:
-                emp_sel = st.selectbox("Selecciona Empleado:", lista_m)
+                emp_sel = st.selectbox("Selecciona Empleado para QR:", lista_m)
                 if emp_sel:
-                    # Usamos la URL simplificada de QuickChart
-                    nombre_escrita = urllib.parse.quote(emp_sel)
-                    # Cambiamos 'text' por 'chl' que es más compatible con navegadores
-                    qr_url = f"https://quickchart.io{nombre_escrita}"
+                    import qrcode
+                    from io import BytesIO
+                    from PIL import Image
+
+                    # Generamos el QR internamente
+                    qr = qrcode.QRCode(version=1, box_size=10, border=4)
+                    qr.add_data(emp_sel)
+                    qr.make(fit=True)
                     
-                    # Forzamos la visualización con st.image
-                    st.image(qr_url, caption=f"QR de {emp_sel}", width=300)
+                    # Creamos la imagen en memoria
+                    img_qr = qr.make_image(fill_color="black", back_color="white")
+                    
+                    # Convertimos a formato que Streamlit entienda
+                    buf = BytesIO()
+                    img_qr.save(buf, format="PNG")
+                    byte_im = buf.getvalue()
+                    
+                    # Mostramos la imagen generada localmente
+                    st.image(byte_im, caption=f"Código QR generado para: {emp_sel}", width=300)
+                    st.success("✅ QR generado internamente (Sin depender de APIs externas)")
