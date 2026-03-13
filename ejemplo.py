@@ -107,7 +107,8 @@ def enviar_reporte_semanal(df):
 
         csv_name = f"REPORTE_ASISTENCIA_{hoy.strftime('%d_%m_%Y')}.csv"
         part = MIMEBase('application', 'octet-stream')
-        part.set_payload(csv_final.to_csv(index=False).encode('utf-8')).encode('utf-8-sig'))
+    
+        csv_data = csv_final.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
         encoders.encode_base64(part)
         part.add_header('Content-Disposition', f'attachment; filename="{csv_name}"')
         msg.attach(part)
