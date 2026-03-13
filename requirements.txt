@@ -3,3 +3,5 @@ pandas
 streamlit-js-eval
 opencv-python-headless
 pytz
+qrcode
+pillow
