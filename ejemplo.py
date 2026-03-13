@@ -182,28 +182,60 @@ if loc:
     else: st.error("Fuera de rango.")
 
 # --- 5. PANEL ADMIN ---
+# --- 5. PANEL ADMIN (ACTUALIZADO CON VISOR DE QR) ---
 st.divider()
 with st.expander("🔐 Administración"):
     if st.text_input("Password", type="password", key="p_adm") == "NEOMOTIC2024":
         df_a = conn.read(ttl=0)
-        try: lista_m = conn.read(worksheet="Empleados", ttl=0)['Nombre'].tolist()
-        except: lista_m = []
+        try: 
+            df_empleados = conn.read(worksheet="Empleados", ttl=0)
+            lista_m = df_empleados['Nombre'].tolist()
+        except: 
+            lista_m = []
+            df_empleados = pd.DataFrame()
         
-        t1, t2, t3 = st.tabs(["📋 Hoy", "🚫 Faltantes", "🗺️ Mapa"])
+        # Agregamos la pestaña "Generar QR" al final
+        t1, t2, t3, t4 = st.tabs(["📋 Hoy", "🚫 Faltantes", "🗺️ Mapa", "🖨️ Generar QR"])
+        
         df_a['Hora_dt'] = pd.to_datetime(df_a['Hora'], dayfirst=True, errors='coerce')
         df_h = df_a[df_a['Hora_dt'].dt.date == ahora.date()]
 
         with t1: 
             st.dataframe(df_h[['Empleado', 'Hora', 'Tipo', 'Estatus']], use_container_width=True)
-            if st.button("📧 Enviar Reporte Completo"):
-                with st.spinner("Procesando..."):
-                    if enviar_reporte_semanal(df_a) is True: st.success("✅ Enviado.")
-                    else: st.error("Error al enviar.")
+            if st.button("📧 Enviar Reporte Semanal Completo", key="btn_mail_final"):
+                with st.spinner("Procesando y validando permisos..."):
+                    res = enviar_reporte_semanal(df_a)
+                    if res is True: st.success("✅ Reporte enviado con éxito.")
+                    else: st.error(f"Error: {res}")
+        
         with t2:
-            llegaron = df_h[df_h['Tipo'] == 'Entrada']['Empleado'].unique()
-            faltan = [e for e in lista_m if e not in llegaron]
-            for f in (faltan if faltan else ["¡Completos!"]): st.write(f"❌ {f}" if f != "¡Completos!" else f)
+            if lista_m:
+                llegaron = df_h[df_h['Tipo'] == 'Entrada']['Empleado'].unique()
+                faltan = [e for e in lista_m if e not in llegaron]
+                if faltan:
+                    for f in faltan: st.write(f"❌ {f}")
+                else: st.success("¡Todos los empleados registraron entrada!")
+        
         with t3:
             pts = df_h.dropna(subset=['Lat', 'Lon']).rename(columns={'Lat':'lat', 'Lon':'lon'})
             st.map(pts if not pts.empty else pd.DataFrame({'lat':[OFICINA_LAT],'lon':[OFICINA_LON]}))
 
+        # --- NUEVA PESTAÑA: GENERADOR DE QR DIGITAL ---
+        with t4:
+            st.subheader("Generador de Código QR")
+            if lista_m:
+                emp_sel = st.selectbox("Selecciona al empleado para ver su QR:", lista_m)
+                if emp_sel:
+                    # Generamos la URL del QR usando Google Charts API
+                    # Usamos urllib.parse.quote para manejar espacios y acentos en el nombre
+                    nombre_codificado = urllib.parse.quote(emp_sel)
+                    qr_url = f"https://chart.googleapis.com{nombre_codificado}"
+                    
+                    c1, c2 = st.columns([1, 2])
+                    with c1:
+                        st.image(qr_url, width=250)
+                    with c2:
+                        st.write(f"### QR Oficial: {emp_sel}")
+                        st.info("Puedes mostrar este código en tu celular para que el empleado lo escanee si no trae su gafete impreso.")
+            else:
+                st.warning("No se encontraron empleados en la pestaña 'Empleados' de Google Sheets.")
