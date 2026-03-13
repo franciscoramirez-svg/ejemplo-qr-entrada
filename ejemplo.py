@@ -27,7 +27,7 @@ OFICINA_LON = -96.174232
 RADIO_PERMITIDO = 1000   
 TELEFONO_ADMIN_WA = "5212296936270" 
 
-# --- 2. FUNCIÓN DE CORREO CON ALERTAS CRÍTICAS Y ORDEN ALFABÉTICO ---
+# --- 2. FUNCIÓN DE CORREO CON DISEÑO EJECUTIVO ---
 def enviar_reporte_semanal(df):
     try:
         PASSWORD_APP = st.secrets["EMAIL_PASSWORD"]
@@ -79,21 +79,28 @@ def enviar_reporte_semanal(df):
 
         nom[['Total_Horas', 'Horas_Extras', 'Observaciones']] = nom.apply(calcular_jornada_detallada, axis=1)
 
-        # --- LÓGICA DE ALERTAS PARA EL CUERPO DEL CORREO ---
+        # --- DISEÑO DE ALERTAS VISUALES ---
         retardos_graves = df_filtrado[df_filtrado['Estatus'] == "RETARDO CRÍTICO"]
         conteo_r = df_filtrado[df_filtrado['Estatus'] == "Retardo"].groupby('Empleado').size()
         reincidentes = conteo_r[conteo_r >= 3]
         salidas_no_auth = df_filtrado[df_filtrado['Estatus'] == "SALIDA NO AUTORIZADA"]
+        olvidos = nom[nom['Observaciones'].str.contains("⚠️")]
 
         alerta_html = ""
         if not retardos_graves.empty:
-            alerta_html += "<div style='background:#ff0000;padding:12px;color:white;border-radius:5px;'><b>🚨 RETARDOS CRÍTICOS (>30 MIN):</b><ul>"
-            for _, r in retardos_graves.iterrows(): alerta_html += f"<li>{r['Empleado']}: {r['Min_Retardo']} min ({r['Hora']})</li>"
-            alerta_html += "</ul></div><br>"
+            alerta_html += "<div style='background:#d32f2f;padding:15px;border-radius:8px;color:white;margin-bottom:10px;'><h3>🚨 RETARDOS CRÍTICOS (>30 MIN)</h3><ul>"
+            for _, r in retardos_graves.iterrows(): alerta_html += f"<li><b>{r['Empleado']}</b>: {r['Min_Retardo']} min ({r['Hora']})</li>"
+            alerta_html += "</ul></div>"
+
         if not reincidentes.empty or not salidas_no_auth.empty:
-            alerta_html += "<div style='background:#fff3cd;padding:10px;border-left:5px solid #ffc107;'><b>⚠️ INCIDENCIAS DE SEMANA:</b><ul>"
-            for e, c in reincidentes.items(): alerta_html += f"<li>{e}: Acumula {c} retardos normales.</li>"
-            for _, s in salidas_no_auth.iterrows(): alerta_html += f"<li>{s['Empleado']}: Salida NO autorizada ({s['Hora']}).</li>"
+            alerta_html += "<div style='background:#fff9c4;padding:15px;border-left:8px solid #fbc02d;border-radius:4px;color:#333;margin-bottom:10px;'><h3 style='color:#856404;'>⚠️ INCIDENCIAS SEMANALES</h3><ul>"
+            for e, c in reincidentes.items(): alerta_html += f"<li><b>{e}</b>: {c} retardos acumulados.</li>"
+            for _, s in salidas_no_auth.iterrows(): alerta_html += f"<li><b>{s['Empleado']}</b>: Salida NO autorizada ({s['Hora']}).</li>"
+            alerta_html += "</ul></div>"
+
+        if not olvidos.empty:
+            alerta_html += "<div style='background:#ffe0b2;padding:10px;border-left:8px solid #fb8c00;border-radius:4px;color:#333;'><h3>🔔 REGISTROS INCOMPLETOS</h3><ul>"
+            for _, r in olvidos.iterrows(): alerta_html += f"<li>{r['Empleado']} ({r['Fecha']}): {r['Observaciones']}</li>"
             alerta_html += "</ul></div>"
 
         # --- ORDENAR Y PREPARAR CSV ---
@@ -101,8 +108,9 @@ def enviar_reporte_semanal(df):
         csv_final = csv_final.sort_values(by=['Empleado', 'Fecha'], ascending=[True, True])
 
         msg = MIMEMultipart()
-        msg['Subject'] = f"📊 Reporte de Nómina NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
-        msg.attach(MIMEText(f"<html><body><h2>Resumen Semanal</h2>{alerta_html}<p>Detalle adjunto en CSV (Ordenado A-Z).</p></body></html>", 'html'))
+        msg['Subject'] = f"📊 REPORTE NÓMINA NEOMOTIC - {hoy.strftime('%d/%m/%Y')}"
+        cuerpo = f"<html><body style='font-family:Arial;padding:20px;'><div style='background:white;padding:20px;border-radius:10px;max-width:600px;margin:auto;'><h2>Resumen Semanal</h2>{alerta_html}<br><p style='font-size:12px;color:#7f8c8d;'>Detalle completo adjunto en CSV (Ordenado A-Z).</p></div></body></html>"
+        msg.attach(MIMEText(cuerpo, 'html'))
 
         csv_name = f"REPORTE_{hoy.strftime('%d_%m_%Y')}.csv"
         csv_data = csv_final.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
@@ -163,7 +171,7 @@ if loc:
                                     df_m = conn.read(worksheet="Empleados", ttl=0)
                                     auth = (df_m.loc[df_m['Nombre'] == data, 'Autoriza_Extra'].values == "SÍ")
                                     est = "Salida Autorizada" if auth else "SALIDA NO AUTORIZADA"
-                                except: est = "Salida (Sin validar)"
+                                except: est = "Salida (Error validación)"
                             else: est = "Salida a Tiempo"
 
                         nuevo = pd.DataFrame([[data, ahora.strftime("%d/%m/%Y %H:%M:%S"), lat_act, lon_act, tipo, est, min_r]], 
@@ -171,9 +179,13 @@ if loc:
                         _ = conn.update(data=pd.concat([df_act, nuevo], ignore_index=True))
                         
                         if est in ["RETARDO CRÍTICO", "SALIDA NO AUTORIZADA"]:
-                            st.error(f"🚨 {data}: {est}. Reportarse con admin.")
+                            st.error(f"🚨 {data}: {est}. Favor de reportarse.")
+                            st.snow()
                         elif est == "Retardo": st.warning(f"⏳ {data}: Retardo de {min_r} min.")
-                        else: st.success(f"✅ {tipo} OK: {est}")
+                        else: 
+                            st.success(f"✅ {tipo} OK: {est}")
+                            if tipo == "Entrada": st.balloons()
+                            else: st.snow()
                     st.session_state.procesando = False
 
                 st.subheader(f"Empleado: {data}")
@@ -182,56 +194,37 @@ if loc:
                 c2.button("📤 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True, key="btn_s")
     else: st.error("Fuera de rango.")
 
-# --- 5. PANEL ADMIN ---
-# --- 5. PANEL ADMIN (ACTUALIZADO CON VISOR DE QR) ---
+# --- 5. PANEL ADMIN CON GENERADOR DE QR ---
 st.divider()
 with st.expander("🔐 Administración"):
     if st.text_input("Password", type="password", key="p_adm") == "NEOMOTIC2024":
         df_a = conn.read(ttl=0)
         try: 
-            df_empleados = conn.read(worksheet="Empleados", ttl=0)
-            lista_m = df_empleados['Nombre'].tolist()
-        except: 
-            lista_m = []
-            df_empleados = pd.DataFrame()
+            df_empl = conn.read(worksheet="Empleados", ttl=0)
+            lista_m = df_empl['Nombre'].tolist()
+        except: lista_m = []
         
-        # Agregamos la pestaña "Generar QR" al final
         t1, t2, t3, t4 = st.tabs(["📋 Hoy", "🚫 Faltantes", "🗺️ Mapa", "🖨️ Generar QR"])
-        
         df_a['Hora_dt'] = pd.to_datetime(df_a['Hora'], dayfirst=True, errors='coerce')
         df_h = df_a[df_a['Hora_dt'].dt.date == ahora.date()]
 
         with t1: 
             st.dataframe(df_h[['Empleado', 'Hora', 'Tipo', 'Estatus']], use_container_width=True)
-            if st.button("📧 Enviar Reporte Semanal Completo", key="btn_mail_final"):
-                with st.spinner("Procesando y validando permisos..."):
-                    res = enviar_reporte_semanal(df_a)
-                    if res is True: st.success("✅ Reporte enviado con éxito.")
-                    else: st.error(f"Error: {res}")
-        
+            if st.button("📧 Enviar Reporte Completo"):
+                with st.spinner("Enviando..."):
+                    if enviar_reporte_semanal(df_a) is True: st.success("✅ Reporte enviado.")
+                    else: st.error("Error al enviar.")
         with t2:
-            if lista_m:
-                llegaron = df_h[df_h['Tipo'] == 'Entrada']['Empleado'].unique()
-                faltan = [e for e in lista_m if e not in llegaron]
-                if faltan:
-                    for f in faltan: st.write(f"❌ {f}")
-                else: st.success("¡Todos los empleados registraron entrada!")
-        
+            llegaron = df_h[df_h['Tipo'] == 'Entrada']['Empleado'].unique()
+            faltan = [e for e in lista_m if e not in llegaron]
+            for f in (faltan if faltan else ["¡Completos!"]): st.write(f"❌ {f}" if f != "¡Completos!" else f)
         with t3:
             pts = df_h.dropna(subset=['Lat', 'Lon']).rename(columns={'Lat':'lat', 'Lon':'lon'})
             st.map(pts if not pts.empty else pd.DataFrame({'lat':[OFICINA_LAT],'lon':[OFICINA_LON]}))
-
-        # --- NUEVA PESTAÑA: GENERADOR DE QR DIGITAL ---
-                # --- PESTAÑA DE GENERACIÓN DE QR (ACTUALIZADA) ---
         with t4:
             st.subheader("Generador de QR Digital")
-            if lista_m:
-                emp_sel = st.selectbox("Selecciona Empleado:", lista_m)
-                if emp_sel:
-                    # Usamos QuickChart API (Alternativa moderna a Google Charts)
-                    nombre_encoded = urllib.parse.quote(emp_sel)
-                    # Nueva URL funcional:
-                    qr_url = f"https://quickchart.io{nombre_encoded}&size=300"
-                    
-                    st.image(qr_url, caption=f"QR oficial de {emp_sel}", width=250)
-                    st.info("💡 Este código es generado mediante QuickChart y es 100% compatible.")
+            emp_sel = st.selectbox("Selecciona Empleado:", lista_m)
+            if emp_sel:
+                qr_url = f"https://quickchart.io{urllib.parse.quote(emp_sel)}&size=300"
+                st.image(qr_url, caption=f"QR oficial de {emp_sel}", width=250)
+                st.info("💡 Puedes escanear este QR directamente desde la pantalla.")
