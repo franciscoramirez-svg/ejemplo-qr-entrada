@@ -219,3 +219,73 @@ if loc:
 
     else: st.error("Fuera de rango.")
 
+# --- 5. PANEL ADMIN (Asegúrate de que esté al final del archivo) ---
+st.divider()
+with st.expander("🔐 Administración"):
+    # Input de contraseña para proteger los datos
+    if st.text_input("Password", type="password", key="p_adm") == "NEOMOTIC2024":
+        
+        # Lectura de datos frescos de la sábana principal
+        df_a = conn.read(ttl=0)
+        
+        # Obtener lista de empleados desde la pestaña 'Empleados'
+        try: 
+            df_empl = conn.read(worksheet="Empleados", ttl=0)
+            lista_m = df_empl['Nombre'].tolist()
+        except: 
+            lista_m = []
+        
+        # Pestañas de gestión
+        t1, t2, t3, t4 = st.tabs(["📋 Hoy", "🚫 Faltantes", "🗺️ Mapa", "🖨️ Generar QR"])
+        
+        # Procesamiento de fechas para filtrar "Hoy"
+        df_a['Hora_dt'] = pd.to_datetime(df_a['Hora'], dayfirst=True, errors='coerce')
+        df_h = df_a[df_a['Hora_dt'].dt.date == ahora.date()].copy()
+
+        with t1: 
+            # Tabla de registros del día incluyendo la nueva columna Justificacion
+            st.dataframe(df_h[['Empleado', 'Hora', 'Tipo', 'Estatus', 'Justificacion']], use_container_width=True)
+            
+            # Botón de envío de reporte (Línea 152 original)
+            if st.button("📧 Enviar Reporte Semanal", key="btn_final_report"):
+                with st.spinner("Enviando..."):
+                    # Llama a la función definida en la Parte 1
+                    res = enviar_reporte_semanal(df_a)
+                    if res is True: 
+                        st.success("✅ Enviado con éxito.")
+                    else: 
+                        st.error(f"Error al enviar: {res}")
+
+        with t2:
+            # Lógica de quién no ha checado entrada hoy
+            if lista_m:
+                llegaron = df_h[df_h['Tipo'] == 'Entrada']['Empleado'].unique()
+                faltan = [e for e in lista_m if e not in llegaron]
+                if faltan:
+                    for f in faltan: st.write(f"❌ {f}")
+                else:
+                    st.success("¡Personal completo hoy!")
+            else:
+                st.info("Carga la lista de nombres en la pestaña 'Empleados' para ver faltantes.")
+
+        with t3:
+            # Mapa de registros con GPS
+            pts = df_h.dropna(subset=['Lat', 'Lon']).copy()
+            if not pts.empty:
+                pts = pts.rename(columns={'Lat': 'lat', 'Lon': 'lon'})
+                st.map(pts[['lat', 'lon']])
+            else: 
+                st.info("Sin coordenadas registradas hoy.")
+
+        with t4:
+            # Generador de códigos QR para nuevos empleados
+            st.subheader("Generador de QR Nativo")
+            emp_sel = st.selectbox("Selecciona Empleado:", lista_m) if lista_m else st.text_input("Nombre:")
+            if emp_sel and st.button("Generar QR"):
+                qr = qrcode.QRCode(version=1, box_size=10, border=4)
+                qr.add_data(emp_sel)
+                qr.make(fit=True)
+                buf = BytesIO()
+                qr.make_image(fill_color="black", back_color="white").save(buf, format="PNG")
+                st.image(buf.getvalue(), caption=f"QR de {emp_sel}", width=250)
+
