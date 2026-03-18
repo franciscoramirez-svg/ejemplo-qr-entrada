@@ -143,24 +143,24 @@ if loc:
             if data:
                 df_act = conn.read(ttl=0)
             def registrar(tipo, empleado_id, lat, lon):
-               # 1. Bloqueo de re-ejecución y lectura fresca
-                if st.session_state.get('procesando', False):
-                  return
+    # 1. Verificación de doble clic
+    if st.session_state.get('procesando', False):
+        return
     
-                st.session_state.procesando = True
+    st.session_state.procesando = True
     
-            try:
-        # Leemos la data más reciente justo antes de escribir
-            df_full = conn.read(ttl=0)
+    try:
+        # --- ESTE BLOQUE DEBE ESTAR ADENTRO DEL TRY ---
+        df_full = conn.read(ttl=0)
         
-        # Filtramos registros del empleado hoy para validar duplicados
-            hoy_str = ahora.strftime("%d/%m/%Y")
-            regs_hoy = df_full[
+        # Filtramos registros del empleado hoy
+        hoy_str = ahora.strftime("%d/%m/%Y")
+        regs_hoy = df_full[
             (df_full['Empleado'] == empleado_id) & 
             (df_full['Hora'].str.contains(hoy_str))
-             ]
+        ]
 
-        # 2. VALIDACIONES DE FLUJO
+        # Validaciones de flujo
         if tipo == "Entrada" and "Entrada" in regs_hoy['Tipo'].values:
             st.warning(f"⚠️ {empleado_id}, ya registraste tu ENTRADA hoy.")
             st.session_state.procesando = False
@@ -168,7 +168,7 @@ if loc:
 
         if tipo == "Salida":
             if "Entrada" not in regs_hoy['Tipo'].values:
-                st.error(f"❌ {empleado_id}, no puedes marcar SALIDA sin haber marcado ENTRADA.")
+                st.error(f"❌ {empleado_id}, no puedes marcar SALIDA sin ENTRADA.")
                 st.session_state.procesando = False
                 return
             if "Salida" in regs_hoy['Tipo'].values:
@@ -176,54 +176,41 @@ if loc:
                 st.session_state.procesando = False
                 return
 
-        # 3. LÓGICA DE ESTATUS Y RETARDOS
+        # Lógica de Estatus
         est, min_r = "A Tiempo", 0
-        
         if tipo == "Entrada":
             h_lim = datetime.strptime(HORA_ENTRADA_OFICIAL, "%H:%M:%S").time()
-            # Calculamos diferencia real en minutos
-            diff = (datetime.combine(date.today(), ahora.time()) - 
-                    datetime.combine(date.today(), h_lim)).total_seconds() / 60
+            diff = (datetime.combine(date.today(), ahora.time()) - datetime.combine(date.today(), h_lim)).total_seconds() / 60
             min_r = max(0, int(diff))
-            
             if min_r > 30: est = "RETARDO CRÍTICO"
             elif min_r > UMBRAL_RETARDO_MINUTOS: est = "Retardo"
-            
         elif tipo == "Salida":
-            h_sal_oficial = datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()
-            if ahora.time() < h_sal_oficial:
-                est = "SALIDA ANTICIPADA" # Nueva categoría útil
-            else:
-                try:
-                    df_m = conn.read(worksheet="Empleados", ttl=0)
-                    auth = (df_m.loc[df_m['Nombre'] == empleado_id, 'Autoriza_Extra'].values == "SÍ")
-                    est = "Salida Autorizada" if auth else "Salida a Tiempo"
-                except: est = "Salida Registrada"
+            h_sal_of = datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()
+            if ahora.time() < h_sal_of: est = "SALIDA ANTICIPADA"
+            else: est = "Salida a Tiempo"
 
-        # 4. ESCRITURA EN GOOGLE SHEETS
+        # Guardar Registro
         nuevo_reg = pd.DataFrame([[
-            empleado_id, 
-            ahora.strftime("%d/%m/%Y %H:%M:%S"), 
+            empleado_id, ahora.strftime("%d/%m/%Y %H:%M:%S"), 
             lat, lon, tipo, est, min_r, ""
         ]], columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo", "Justificacion"])
         
-        updated_df = pd.concat([df_full, nuevo_reg], ignore_index=True)
-        conn.update(data=updated_df)
+        conn.update(data=pd.concat([df_full, nuevo_reg], ignore_index=True))
 
-        # 5. FEEDBACK VISUAL
-        if est in ["RETARDO CRÍTICO", "SALIDA ANTICIPADA"]:
-            st.error(f"🚨 {empleado_id}: {est}. Se ha notificado al sistema.")
-        elif est == "Retardo":
-            st.warning(f"⏳ {empleado_id}, registro con {min_r} min de retardo.")
-        else:
-            st.success(f"✅ {tipo} registrada con éxito para {empleado_id}.")
-            if tipo == "Entrada": st.balloons()
-            else: st.snow()
+        # Configurar Justificación si es necesario
+        if est in ["RETARDO CRÍTICO", "Retardo", "SALIDA ANTICIPADA"]:
+            st.session_state.necesita_justificar = True
+            st.session_state.ultimo_empleado = empleado_id
+            st.session_state.ultima_hora = ahora.strftime("%d/%m/%Y %H:%M:%S")
+
+        st.success(f"✅ {tipo} registrada para {empleado_id}")
 
     except Exception as e:
-        st.error(f"Error al registrar: {e}")
+        st.error(f"Error en el sistema: {e}")
     finally:
+        # Esto siempre se ejecuta, pase lo que pase
         st.session_state.procesando = False
+
 
 
                 st.subheader(f"Empleado: {data}")
