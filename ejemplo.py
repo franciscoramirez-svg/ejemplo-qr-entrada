@@ -198,7 +198,7 @@ if loc:
         finally:
             st.session_state.procesando = False
 
-            st.subheader(f"Empleado: {data}")
+    st.subheader(f"Empleado: {data}")
                 c1, c2 = st.columns(2)
                 c1.button("📥 ENTRADA", on_click=registrar, args=("Entrada",), use_container_width=True, key="btn_e")
                 c2.button("📤 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True, key="btn_s")
