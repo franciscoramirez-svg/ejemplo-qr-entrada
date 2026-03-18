@@ -156,9 +156,9 @@ with st.expander("🔐 Administración"):
                        st.success("✅ Enviado.")
                      else: 
                        st.error("Error al enviar.")
-            except Exception as e:
+                 except Exception as e:
             # Esto imprimirá el error REAL en tu pantalla de Streamlit
-            st.error(f"Fallo crítico: {e}")
+                     st.error(f"Fallo crítico: {e}")
 
         with t2:
             if lista_m:
