@@ -148,9 +148,18 @@ with st.expander("🔐 Administración"):
         with t1: 
             st.dataframe(df_h[['Empleado', 'Hora', 'Tipo', 'Estatus', 'Justificacion']], use_container_width=True)
             if st.button("📧 Enviar Reporte Semanal"):
-                with st.spinner("Enviando..."):
-                    if enviar_reporte_semanal(df_a) is True: st.success("✅ Enviado.")
-                    else: st.error("Error al enviar.")
+              with st.spinner("Enviando..."):
+                 try:
+            # Intentamos ejecutar la función
+                     resultado = enviar_reporte_semanal(df_a)
+                     if resultado is True: 
+                       st.success("✅ Enviado.")
+                     else: 
+                       st.error("Error al enviar.")
+            except Exception as e:
+            # Esto imprimirá el error REAL en tu pantalla de Streamlit
+            st.error(f"Fallo crítico: {e}")
+
         with t2:
             if lista_m:
                 llegaron = df_h[df_h['Tipo'] == 'Entrada']['Empleado'].unique()
