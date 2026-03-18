@@ -151,14 +151,14 @@ if loc:
     
             try:
         # Leemos la data más reciente justo antes de escribir
-        df_full = conn.read(ttl=0)
+            df_full = conn.read(ttl=0)
         
         # Filtramos registros del empleado hoy para validar duplicados
-        hoy_str = ahora.strftime("%d/%m/%Y")
-        regs_hoy = df_full[
+            hoy_str = ahora.strftime("%d/%m/%Y")
+            regs_hoy = df_full[
             (df_full['Empleado'] == empleado_id) & 
             (df_full['Hora'].str.contains(hoy_str))
-        ]
+             ]
 
         # 2. VALIDACIONES DE FLUJO
         if tipo == "Entrada" and "Entrada" in regs_hoy['Tipo'].values:
