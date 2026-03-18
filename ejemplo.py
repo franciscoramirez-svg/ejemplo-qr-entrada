@@ -197,12 +197,36 @@ if loc:
             st.error(f"Error: {e}")
         finally:
             st.session_state.procesando = False
-   if data:
-        st.subheader(f"Empleado: {data}")
+                if data:
+                # La función 'registrar' debe estar definida ARRIBA de este bloque
+                
+                st.subheader(f"Empleado: {data}")
                 c1, c2 = st.columns(2)
-                c1.button("📥 ENTRADA", on_click=registrar, args=("Entrada",), use_container_width=True, key="btn_e")
-                c2.button("📤 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True, key="btn_s")
-    else: st.error("Fuera de rango.")
+                
+                # Actualizamos los argumentos para que coincidan con la nueva función
+                c1.button("📥 ENTRADA", 
+                          on_click=registrar, 
+                          args=("Entrada", data, lat_act, lon_act), 
+                          use_container_width=True, key="btn_e")
+                
+                c2.button("📤 SALIDA", 
+                          on_click=registrar, 
+                          args=("Salida", data, lat_act, lon_act), 
+                          use_container_width=True, key="btn_s")
+
+                # --- BLOQUE DE JUSTIFICACIÓN (Agrégalo aquí) ---
+                if st.session_state.get('necesita_justificar', False):
+                    with st.form("form_j"):
+                        st.warning(f"⚠️ {st.session_state.ultimo_empleado}, justifica tu incidencia:")
+                        motivo = st.text_input("Motivo:")
+                        if st.form_submit_button("Guardar"):
+                            df_j = conn.read(ttl=0)
+                            mask = (df_j['Empleado'] == st.session_state.ultimo_empleado) & \
+                                   (df_j['Hora'] == st.session_state.ultima_hora)
+                            df_j.loc[mask, 'Justificacion'] = motivo
+                            conn.update(data=df_j)
+                            st.session_state.necesita_justificar = False
+                            st.rerun()
 
 # --- 5. PANEL ADMIN ---
 st.divider()
