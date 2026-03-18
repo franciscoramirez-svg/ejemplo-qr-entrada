@@ -142,14 +142,14 @@ if loc:
             data, _, _ = cv2.QRCodeDetector().detectAndDecode(img)
             if data:
                 df_act = conn.read(ttl=0)
-                def registrar(tipo, empleado_id, lat, lon):
-    # 1. Bloqueo de re-ejecución y lectura fresca
-    if st.session_state.get('procesando', False):
-        return
+            def registrar(tipo, empleado_id, lat, lon):
+               # 1. Bloqueo de re-ejecución y lectura fresca
+                if st.session_state.get('procesando', False):
+                  return
     
-    st.session_state.procesando = True
+                st.session_state.procesando = True
     
-    try:
+            try:
         # Leemos la data más reciente justo antes de escribir
         df_full = conn.read(ttl=0)
         
