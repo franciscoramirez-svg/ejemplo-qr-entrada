@@ -142,47 +142,89 @@ if loc:
             data, _, _ = cv2.QRCodeDetector().detectAndDecode(img)
             if data:
                 df_act = conn.read(ttl=0)
-                def registrar(tipo):
-                    st.session_state.procesando = True
-                    ult_reg = df_act[df_act['Empleado'] == data].tail(1)
-                    if tipo == "Entrada" and not ult_reg.empty and ult_reg['Tipo'].values == "Entrada":
-                        st.error(f"⚠️ {data}, no marcaste SALIDA anterior.")
-                    else:
-                        est, min_r = "A Tiempo", 0
-                        if tipo == "Entrada":
-                            h_lim = datetime.strptime(HORA_ENTRADA_OFICIAL, "%H:%M:%S").time()
-                            diff = (datetime.combine(date.today(), ahora.time()) - datetime.combine(date.today(), h_lim)).total_seconds() / 60
-                            min_r = max(0, int(diff))
-                            if min_r > 30: est = "RETARDO CRÍTICO"
-                            elif min_r > UMBRAL_RETARDO_MINUTOS: est = "Retardo"
-                        elif tipo == "Salida":
-                            h_sal = datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()
-                            if ahora.time() > h_sal:
-                                try:
-                                    df_m = conn.read(worksheet="Empleados", ttl=0)
-                                    auth = (df_m.loc[df_m['Nombre'] == data, 'Autoriza_Extra'].values == "SÍ")
-                                    est = "Salida Autorizada" if auth else "SALIDA NO AUTORIZADA"
-                                except: est = "Error Validación"
-                            else: est = "Salida a Tiempo"
+                def registrar(tipo, empleado_id, lat, lon):
+    # 1. Bloqueo de re-ejecución y lectura fresca
+    if st.session_state.get('procesando', False):
+        return
+    
+    st.session_state.procesando = True
+    
+    try:
+        # Leemos la data más reciente justo antes de escribir
+        df_full = conn.read(ttl=0)
+        
+        # Filtramos registros del empleado hoy para validar duplicados
+        hoy_str = ahora.strftime("%d/%m/%Y")
+        regs_hoy = df_full[
+            (df_full['Empleado'] == empleado_id) & 
+            (df_full['Hora'].str.contains(hoy_str))
+        ]
 
-                        nuevo = pd.DataFrame([[data, ahora.strftime("%d/%m/%Y %H:%M:%S"), lat_act, lon_act, tipo, est, min_r, ""]], 
-                                             columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo", "Justificacion"])
-                        _ = conn.update(data=pd.concat([df_act, nuevo], ignore_index=True))
-                        
-                        # Mensaje de Bienvenida Dinámico
-                        saludo = "¡Buenos días" if ahora.hour < 12 else "¡Buenas tardes"
-                        if est in ["RETARDO CRÍTICO", "SALIDA NO AUTORIZADA"]:
-                            st.error(f"🚨 {data}: {est}. Favor de reportarse con su supervisor.")
-                        elif est == "Retardo":
-                            st.warning(f"⏳ {data}, registro con {min_r} min de retardo.")
-                        else:
-                            if tipo == "Entrada":
-                                st.success(f"{saludo}, {data}! 👋 Entrada registrada. ¡Que tengas un excelente día!")
-                                st.balloons()
-                            else:
-                                st.success(f"{saludo}, {data}! 👋 Salida registrada. ¡Gracias y buen descanso!")
-                                st.snow()
-                    st.session_state.procesando = False
+        # 2. VALIDACIONES DE FLUJO
+        if tipo == "Entrada" and "Entrada" in regs_hoy['Tipo'].values:
+            st.warning(f"⚠️ {empleado_id}, ya registraste tu ENTRADA hoy.")
+            st.session_state.procesando = False
+            return
+
+        if tipo == "Salida":
+            if "Entrada" not in regs_hoy['Tipo'].values:
+                st.error(f"❌ {empleado_id}, no puedes marcar SALIDA sin haber marcado ENTRADA.")
+                st.session_state.procesando = False
+                return
+            if "Salida" in regs_hoy['Tipo'].values:
+                st.warning(f"⚠️ {empleado_id}, ya registraste tu SALIDA hoy.")
+                st.session_state.procesando = False
+                return
+
+        # 3. LÓGICA DE ESTATUS Y RETARDOS
+        est, min_r = "A Tiempo", 0
+        
+        if tipo == "Entrada":
+            h_lim = datetime.strptime(HORA_ENTRADA_OFICIAL, "%H:%M:%S").time()
+            # Calculamos diferencia real en minutos
+            diff = (datetime.combine(date.today(), ahora.time()) - 
+                    datetime.combine(date.today(), h_lim)).total_seconds() / 60
+            min_r = max(0, int(diff))
+            
+            if min_r > 30: est = "RETARDO CRÍTICO"
+            elif min_r > UMBRAL_RETARDO_MINUTOS: est = "Retardo"
+            
+        elif tipo == "Salida":
+            h_sal_oficial = datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()
+            if ahora.time() < h_sal_oficial:
+                est = "SALIDA ANTICIPADA" # Nueva categoría útil
+            else:
+                try:
+                    df_m = conn.read(worksheet="Empleados", ttl=0)
+                    auth = (df_m.loc[df_m['Nombre'] == empleado_id, 'Autoriza_Extra'].values == "SÍ")
+                    est = "Salida Autorizada" if auth else "Salida a Tiempo"
+                except: est = "Salida Registrada"
+
+        # 4. ESCRITURA EN GOOGLE SHEETS
+        nuevo_reg = pd.DataFrame([[
+            empleado_id, 
+            ahora.strftime("%d/%m/%Y %H:%M:%S"), 
+            lat, lon, tipo, est, min_r, ""
+        ]], columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo", "Justificacion"])
+        
+        updated_df = pd.concat([df_full, nuevo_reg], ignore_index=True)
+        conn.update(data=updated_df)
+
+        # 5. FEEDBACK VISUAL
+        if est in ["RETARDO CRÍTICO", "SALIDA ANTICIPADA"]:
+            st.error(f"🚨 {empleado_id}: {est}. Se ha notificado al sistema.")
+        elif est == "Retardo":
+            st.warning(f"⏳ {empleado_id}, registro con {min_r} min de retardo.")
+        else:
+            st.success(f"✅ {tipo} registrada con éxito para {empleado_id}.")
+            if tipo == "Entrada": st.balloons()
+            else: st.snow()
+
+    except Exception as e:
+        st.error(f"Error al registrar: {e}")
+    finally:
+        st.session_state.procesando = False
+
 
                 st.subheader(f"Empleado: {data}")
                 c1, c2 = st.columns(2)
