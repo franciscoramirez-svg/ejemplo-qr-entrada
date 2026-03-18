@@ -172,7 +172,7 @@ if loc:
                         # Mensaje de Bienvenida Dinámico
                         saludo = "¡Buenos días" if ahora.hour < 12 else "¡Buenas tardes"
                         if est in ["RETARDO CRÍTICO", "SALIDA NO AUTORIZADA"]:
-                            st.error(f"🚨 {data}: {est}. Favor de reportarse.")
+                            st.error(f"🚨 {data}: {est}. Favor de reportarse con su supervisor.")
                         elif est == "Retardo":
                             st.warning(f"⏳ {data}, registro con {min_r} min de retardo.")
                         else:
