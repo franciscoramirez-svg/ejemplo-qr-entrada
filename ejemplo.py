@@ -142,77 +142,75 @@ if loc:
             data, _, _ = cv2.QRCodeDetector().detectAndDecode(img)
             if data:
                 df_act = conn.read(ttl=0)
-          def registrar(tipo, empleado_id, lat, lon):
+          
+        def registrar(tipo, empleado_id, lat, lon):
     # 1. Verificación de doble clic
              if st.session_state.get('procesando', False):
                return
     
-    st.session_state.procesando = True
+             st.session_state.procesando = True
     
-    try:
+              try:
         # --- ESTE BLOQUE DEBE ESTAR ADENTRO DEL TRY ---
-        df_full = conn.read(ttl=0)
+                  df_full = conn.read(ttl=0)
         
         # Filtramos registros del empleado hoy
-        hoy_str = ahora.strftime("%d/%m/%Y")
-        regs_hoy = df_full[
-            (df_full['Empleado'] == empleado_id) & 
-            (df_full['Hora'].str.contains(hoy_str))
-        ]
+                  hoy_str = ahora.strftime("%d/%m/%Y")
+                  regs_hoy = df_full[
+                      (df_full['Empleado'] == empleado_id) & 
+                      (df_full['Hora'].str.contains(hoy_str))
+                  ]
 
         # Validaciones de flujo
-        if tipo == "Entrada" and "Entrada" in regs_hoy['Tipo'].values:
-            st.warning(f"⚠️ {empleado_id}, ya registraste tu ENTRADA hoy.")
-            st.session_state.procesando = False
-            return
+                  if tipo == "Entrada" and "Entrada" in regs_hoy['Tipo'].values:
+                      st.warning(f"⚠️ {empleado_id}, ya registraste tu ENTRADA hoy.")
+                      st.session_state.procesando = False
+                      return
 
-        if tipo == "Salida":
-            if "Entrada" not in regs_hoy['Tipo'].values:
-                st.error(f"❌ {empleado_id}, no puedes marcar SALIDA sin ENTRADA.")
-                st.session_state.procesando = False
-                return
-            if "Salida" in regs_hoy['Tipo'].values:
-                st.warning(f"⚠️ {empleado_id}, ya registraste tu SALIDA hoy.")
-                st.session_state.procesando = False
-                return
+                  if tipo == "Salida":
+                      if "Entrada" not in regs_hoy['Tipo'].values:
+                          st.error(f"❌ {empleado_id}, no puedes marcar SALIDA sin ENTRADA.")
+                          st.session_state.procesando = False
+                          return
+                      if "Salida" in regs_hoy['Tipo'].values:
+                          st.warning(f"⚠️ {empleado_id}, ya registraste tu SALIDA hoy.")
+                          st.session_state.procesando = False
+                          return
 
         # Lógica de Estatus
-        est, min_r = "A Tiempo", 0
-        if tipo == "Entrada":
-            h_lim = datetime.strptime(HORA_ENTRADA_OFICIAL, "%H:%M:%S").time()
-            diff = (datetime.combine(date.today(), ahora.time()) - datetime.combine(date.today(), h_lim)).total_seconds() / 60
-            min_r = max(0, int(diff))
-            if min_r > 30: est = "RETARDO CRÍTICO"
-            elif min_r > UMBRAL_RETARDO_MINUTOS: est = "Retardo"
-        elif tipo == "Salida":
-            h_sal_of = datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()
-            if ahora.time() < h_sal_of: est = "SALIDA ANTICIPADA"
-            else: est = "Salida a Tiempo"
+                  est, min_r = "A Tiempo", 0
+                  if tipo == "Entrada":
+                      h_lim = datetime.strptime(HORA_ENTRADA_OFICIAL, "%H:%M:%S").time()
+                      diff = (datetime.combine(date.today(), ahora.time()) - datetime.combine(date.today(), h_lim)).total_seconds() / 60
+                      min_r = max(0, int(diff))
+                      if min_r > 30: est = "RETARDO CRÍTICO"
+                      elif min_r > UMBRAL_RETARDO_MINUTOS: est = "Retardo"
+                  elif tipo == "Salida":
+                      h_sal_of = datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()
+                      if ahora.time() < h_sal_of: est = "SALIDA ANTICIPADA"
+                      else: est = "Salida a Tiempo"
 
         # Guardar Registro
-        nuevo_reg = pd.DataFrame([[
-            empleado_id, ahora.strftime("%d/%m/%Y %H:%M:%S"), 
-            lat, lon, tipo, est, min_r, ""
-        ]], columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo", "Justificacion"])
+                  nuevo_reg = pd.DataFrame([[
+                       empleado_id, ahora.strftime("%d/%m/%Y %H:%M:%S"), 
+                       lat, lon, tipo, est, min_r, ""
+                  ]], columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo", "Justificacion"])
         
-        conn.update(data=pd.concat([df_full, nuevo_reg], ignore_index=True))
+                  conn.update(data=pd.concat([df_full, nuevo_reg], ignore_index=True))
 
         # Configurar Justificación si es necesario
-        if est in ["RETARDO CRÍTICO", "Retardo", "SALIDA ANTICIPADA"]:
-            st.session_state.necesita_justificar = True
-            st.session_state.ultimo_empleado = empleado_id
-            st.session_state.ultima_hora = ahora.strftime("%d/%m/%Y %H:%M:%S")
+                  if est in ["RETARDO CRÍTICO", "Retardo", "SALIDA ANTICIPADA"]:
+                      st.session_state.necesita_justificar = True
+                      st.session_state.ultimo_empleado = empleado_id
+                      st.session_state.ultima_hora = ahora.strftime("%d/%m/%Y %H:%M:%S")
 
-        st.success(f"✅ {tipo} registrada para {empleado_id}")
+                 st.success(f"✅ {tipo} registrada para {empleado_id}")
 
-    except Exception as e:
-        st.error(f"Error en el sistema: {e}")
-    finally:
+             except Exception as e:
+                 st.error(f"Error en el sistema: {e}")
+             finally:
         # Esto siempre se ejecuta, pase lo que pase
-        st.session_state.procesando = False
-
-
-
+                 st.session_state.procesando = False
 
                 st.subheader(f"Empleado: {data}")
                 c1, c2 = st.columns(2)
