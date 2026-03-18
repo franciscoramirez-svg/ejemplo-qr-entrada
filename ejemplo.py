@@ -88,6 +88,7 @@ def calcular_distancia(lat1, lon1, lat2, lon2):
 
 # --- 3. INTERFAZ ---
 st.set_page_config(page_title="NEOMOTIC Access", layout="wide")
+ahora = datetime.now(zona_veracruz)
 if 'procesando' not in st.session_state: st.session_state.procesando = False
 
 st.title("📍 Asistencia Personal TRV")
@@ -133,6 +134,8 @@ st.divider()
 with st.expander("🔐 Administración"):
     if st.text_input("Password", type="password", key="p_adm") == "NEOMOTIC2024":
         df_a = conn.read(ttl=0)
+        df_a['Hora_dt'] = pd.to_datetime(df_a['Hora'], dayfirst=True, errors='coerce')
+        df_h = df_a[df_a['Hora_dt'].dt.date == ahora.date()].copy()
         try: 
             df_empl = conn.read(worksheet="Empleados", ttl=0)
             lista_m = df_empl['Nombre'].tolist()
