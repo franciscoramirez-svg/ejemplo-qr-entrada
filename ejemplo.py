@@ -197,7 +197,7 @@ if loc:
             st.error(f"Error: {e}")
         finally:
             st.session_state.procesando = False
-                if data:
+    if data:
                 # La función 'registrar' debe estar definida ARRIBA de este bloque
                 
                 st.subheader(f"Empleado: {data}")
