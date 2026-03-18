@@ -118,116 +118,119 @@ def enviar_reporte_semanal(df):
         return True
     except Exception as e: return str(e)
 
-# --- 3. DISTANCIA ---
+# --- 3. LÓGICA DE DISTANCIA ---
 def calcular_distancia(lat1, lon1, lat2, lon2):
     lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
     a = sin((lat2-lat1)/2)**2 + cos(lat1) * cos(lat2) * sin((lon2-lon1)/2)**2
     return (2 * asin(sqrt(a))) * 6371000 
 
-# --- 4. INTERFAZ Y REGISTRO ---
+# --- 4. INTERFAZ ---
 st.set_page_config(page_title="NEOMOTIC Access", layout="wide")
 ahora = datetime.now(zona_veracruz)
-if 'procesando' not in st.session_state: st.session_state.procesando = False
-st.title("📍 Asistencia Personal TRV")
 
+# Inicializar estados de sesión
+if 'procesando' not in st.session_state: st.session_state.procesando = False
+if 'necesita_justificar' not in st.session_state: st.session_state.necesita_justificar = False
+
+st.title("📍 Asistencia Personal TRV")
 loc = get_geolocation()
+
 if loc:
     lat_act, lon_act = loc['coords']['latitude'], loc['coords']['longitude']
     dist = calcular_distancia(lat_act, lon_act, OFICINA_LAT, OFICINA_LON)
     
     if dist <= RADIO_PERMITIDO:
-        foto = st.camera_input("Escanea QR")
+        foto = st.camera_input("Escanea tu QR")
+        
         if foto and not st.session_state.procesando:
             img = cv2.imdecode(np.asarray(bytearray(foto.getvalue()), dtype=np.uint8), 1)
             data, _, _ = cv2.QRCodeDetector().detectAndDecode(img)
+            
             if data:
+                st.subheader(f"Empleado: {data}")
                 df_act = conn.read(ttl=0)
+                
                 def registrar(tipo):
                     st.session_state.procesando = True
-                    ult_reg = df_act[df_act['Empleado'] == data].tail(1)
-                    if tipo == "Entrada" and not ult_reg.empty and ult_reg['Tipo'].values == "Entrada":
-                        st.error(f"⚠️ {data}, no marcaste SALIDA anterior.")
-                    else:
-                        est, min_r = "A Tiempo", 0
-                        if tipo == "Entrada":
-                            h_lim = datetime.strptime(HORA_ENTRADA_OFICIAL, "%H:%M:%S").time()
-                            diff = (datetime.combine(date.today(), ahora.time()) - datetime.combine(date.today(), h_lim)).total_seconds() / 60
-                            min_r = max(0, int(diff))
-                            if min_r > 30: est = "RETARDO CRÍTICO"
-                            elif min_r > UMBRAL_RETARDO_MINUTOS: est = "Retardo"
-                        elif tipo == "Salida":
-                            h_sal = datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()
-                            if ahora.time() > h_sal:
-                                try:
-                                    df_m = conn.read(worksheet="Empleados", ttl=0)
-                                    auth = (df_m.loc[df_m['Nombre'] == data, 'Autoriza_Extra'].values == "SÍ")
-                                    est = "Salida Autorizada" if auth else "SALIDA NO AUTORIZADA"
-                                except: est = "Error Validación"
-                            else: est = "Salida a Tiempo"
-
-                        nuevo = pd.DataFrame([[data, ahora.strftime("%d/%m/%Y %H:%M:%S"), lat_act, lon_act, tipo, est, min_r, ""]], 
-                                             columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo", "Justificacion"])
-                        _ = conn.update(data=pd.concat([df_act, nuevo], ignore_index=True))
-                        
-                        # Mensaje de Bienvenida Dinámico
-                        saludo = "¡Buenos días" if ahora.hour < 12 else "¡Buenas tardes"
-                        if est in ["RETARDO CRÍTICO", "SALIDA NO AUTORIZADA"]:
-                            st.error(f"🚨 {data}: {est}. Favor de reportarse con su supervisor.")
-                        elif est == "Retardo":
-                            st.warning(f"⏳ {data}, registro con {min_r} min de retardo.")
-                        else:
-                            if tipo == "Entrada":
-                                st.success(f"{saludo}, {data}! 👋 Entrada registrada. ¡Que tengas un excelente día!")
-                                st.balloons()
-                            else:
-                                st.success(f"{saludo}, {data}! 👋 Salida registrada. ¡Gracias y buen descanso!")
-                                st.snow()
+                    est, min_r = "A Tiempo", 0
+                    
+                    if tipo == "Entrada":
+                        h_lim = datetime.strptime(HORA_ENTRADA_OFICIAL, "%H:%M:%S").time()
+                        diff = datetime.combine(ahora.date(), ahora.time()) - datetime.combine(ahora.date(), h_lim)
+                        min_r = max(0, int(diff.total_seconds() / 60))
+                        if min_r > UMBRAL_RETARDO_MINUTOS: est = "Retardo"
+                        if min_r > 30: est = "RETARDO CRÍTICO"
+                    
+                    # Guardar registro inicial (Justificación vacía por ahora)
+                    nuevo = pd.DataFrame([[data, ahora.strftime("%d/%m/%Y %H:%M:%S"), lat_act, lon_act, tipo, est, min_r, ""]], 
+                                         columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo", "Justificacion"])
+                    
+                    conn.update(data=pd.concat([df_act, nuevo], ignore_index=True))
+                    
+                    # Activar formulario de justificación si es Retardo
+                    if "Retardo" in est:
+                        st.session_state.necesita_justificar = True
+                        st.session_state.ultimo_empleado = data
+                        st.session_state.ultima_hora = ahora.strftime("%d/%m/%Y %H:%M:%S")
+                    
+                    st.toast(f"✅ {tipo} registrada para {data}")
                     st.session_state.procesando = False
 
-                st.subheader(f"Empleado: {data}")
+                # Botones de Acción
                 c1, c2 = st.columns(2)
-                c1.button("📥 ENTRADA", on_click=registrar, args=("Entrada",), use_container_width=True, key="btn_e")
-                c2.button("📤 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True, key="btn_s")
-    else: st.error("Fuera de rango.")
+                c1.button("📥 ENTRADA", on_click=registrar, args=("Entrada",), use_container_width=True)
+                c2.button("📤 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True)
+
+        # BLOQUE DE JUSTIFICACIÓN (Aparece después de marcar entrada con retardo)
+        if st.session_state.necesita_justificar:
+            with st.form("form_j"):
+                st.warning(f"⚠️ {st.session_state.ultimo_empleado}, justifica tu incidencia ({st.session_state.ultima_hora}):")
+                motivo = st.text_input("Escribe el motivo (ej. Tráfico, Cita Médica):")
+                if st.form_submit_button("Guardar Justificación"):
+                    if motivo:
+                        df_j = conn.read(ttl=0)
+                        # Localizar la fila exacta y actualizar
+                        mask = (df_j['Empleado'] == st.session_state.ultimo_empleado) & (df_j['Hora'] == st.session_state.ultima_hora)
+                        df_j.loc[mask, 'Justificacion'] = motivo
+                        conn.update(data=df_j)
+                        
+                        st.session_state.necesita_justificar = False
+                        st.success("Justificación guardada correctamente.")
+                        st.rerun()
+                    else:
+                        st.error("Debes escribir un motivo.")
+    else:
+        st.error(f"Fuera de rango. Estás a {int(dist)}m de la oficina.")
+else:
+    st.info("Esperando señal GPS...")
 
 # --- 5. PANEL ADMIN ---
 st.divider()
 with st.expander("🔐 Administración"):
     if st.text_input("Password", type="password", key="p_adm") == "NEOMOTIC2024":
         df_a = conn.read(ttl=0)
-        try: 
-            df_empl = conn.read(worksheet="Empleados", ttl=0)
-            lista_m = df_empl['Nombre'].tolist()
-        except: lista_m = []
-        
-        t1, t2, t3, t4 = st.tabs(["📋 Hoy", "🚫 Faltantes", "🗺️ Mapa", "🖨️ Generar QR"])
         df_a['Hora_dt'] = pd.to_datetime(df_a['Hora'], dayfirst=True, errors='coerce')
         df_h = df_a[df_a['Hora_dt'].dt.date == ahora.date()].copy()
-
-        with t1: 
+        
+        t1, t2, t3 = st.tabs(["📋 Registros Hoy", "📧 Reportes", "🖨️ QRs"])
+        
+        with t1:
             st.dataframe(df_h[['Empleado', 'Hora', 'Tipo', 'Estatus', 'Justificacion']], use_container_width=True)
-            if st.button("📧 Enviar Reporte Semanal"):
-                with st.spinner("Enviando..."):
-                    if enviar_reporte_semanal(df_a) is True: st.success("✅ Enviado.")
-                    else: st.error("Error al enviar.")
+            
         with t2:
-            if lista_m:
-                llegaron = df_h[df_h['Tipo'] == 'Entrada']['Empleado'].unique()
-                faltan = [e for e in lista_m if e not in llegaron]
-                for f in (faltan if faltan else ["¡Completos!"]): st.write(f"❌ {f}" if f != "¡Completos!" else f)
+            if st.button("📧 Enviar Auditoría Semanal", key="btn_audit"):
+                with st.spinner("Procesando nómina..."):
+                    res = enviar_reporte_semanal(df_a)
+                    if res is True: st.success("✅ Reporte enviado.")
+                    else: st.error(res)
+        
         with t3:
-            pts = df_h.dropna(subset=['Lat', 'Lon']).copy()
-            if not pts.empty:
-                pts = pts.rename(columns={'Lat': 'lat', 'Lon': 'lon'})
-                st.map(pts)
-            else: st.info("Sin coordenadas hoy.")
-        with t4:
-            st.subheader("Generador de QR Nativo")
-            emp_sel = st.selectbox("Selecciona Empleado:", lista_m)
-            if emp_sel:
+            emp_nombre = st.text_input("Nombre para QR:")
+            if st.button("Generar Código"):
                 qr = qrcode.QRCode(version=1, box_size=10, border=4)
-                qr.add_data(emp_sel)
+                qr.add_data(emp_nombre)
                 qr.make(fit=True)
                 buf = BytesIO()
                 qr.make_image(fill_color="black", back_color="white").save(buf, format="PNG")
-                st.image(buf.getvalue(), caption=f"QR de {emp_sel}", width=250)
+                st.image(buf.getvalue(), caption=f"QR de {emp_nombre}", width=250)
+
