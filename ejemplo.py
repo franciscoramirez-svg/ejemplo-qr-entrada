@@ -176,15 +176,16 @@ with st.status("Verificando ubicación GPS...", expanded=False) as status:
         dist = calcular_distancia(lat_act, lon_act, OFICINA_LAT, OFICINA_LON)
     
         if dist <= RADIO_PERMITIDO:
-        st.success(f"✅ Estás a {int(dist)}m de la oficina. Puedes registrarte.")
+           st.success(f"✅ Estás a {int(dist)}m de la oficina. Puedes registrarte.")
     
-        foto = st.camera_input("Escanea QR")
-        if foto and not st.session_state.procesando:
-            img = cv2.imdecode(np.asarray(bytearray(foto.getvalue()), dtype=np.uint8), 1)
-            data, _, _ = cv2.QRCodeDetector().detectAndDecode(img)
-            data, bbox, _ = cv2.QRCodeDetector().detectAndDecode(img)
+           foto = st.camera_input("Escanea QR")
+           if foto and not st.session_state.procesando:
+              img = cv2.imdecode(np.asarray(bytearray(foto.getvalue()), dtype=np.uint8), 1)
+              data, _, _ = cv2.QRCodeDetector().detectAndDecode(img)
+              data, bbox, _ = cv2.QRCodeDetector().detectAndDecode(img)
+               
             if data:
-                 st.success(f"📱 QR Detectado: {data}") # Feedback inmediato para el usuario
+                st.success(f"📱 QR Detectado: {data}") # Feedback inmediato para el usuario
             
             if data:
                 df_act = conn.read(ttl=0)
