@@ -333,6 +333,17 @@ with st.expander("🔐 Administración"):
                 use_container_width=True
             )
 
+            st.divider() # Un separador visual para orden
+
+            # 3. BOTÓN DE ENVÍO POR CORREO (El que ya tenías, pero asegúrate de que esté aquí)
+            if st.button("📧 Enviar Reporte Semanal a Directivos", key="btn_final_report", use_container_width=True):
+                with st.spinner("Generando reporte con colores y enviando..."):
+                    # Esta función usa el nuevo diseño HTML que mejoramos antes
+                    res = enviar_reporte_semanal(df_a)
+                    if res is True: 
+                        st.success("✅ ¡Reporte enviado con éxito a los correos configurados!")
+                    else: 
+                        st.error(f"❌ Error al enviar el correo: {res}")
 
         with t2:
             # Lógica de quién no ha checado entrada hoy
