@@ -284,15 +284,15 @@ if st.session_state.ubicacion_ok:
 
 
             # Botones de acción
-            c1, c2 = st.columns(2)
-            if c1.button("📥 ENTRADA", on_click=registrar, args=("Entrada",), use_container_width=True):
+    c1, c2 = st.columns(2)
+    if c1.button("📥 ENTRADA", on_click=registrar, args=("Entrada",), use_container_width=True):
                 st.rerun() # Forzamos recarga para limpiar el QR de la cámara
                 
-            if c2.button("📤 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True):
+    if c2.button("📤 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True):
                 st.rerun()
 
             # BOTÓN PARA LIMPIAR PANTALLA (Para el siguiente empleado)
-            if st.button("🔄 LIMPIAR", type="secondary", use_container_width=True):
+    if st.button("🔄 LIMPIAR", type="secondary", use_container_width=True):
                 # Opcional: Si quieres que el siguiente también valide GPS, pon ubicacion_ok en False
                 # st.session_state.ubicacion_ok = False 
                 st.rerun()
