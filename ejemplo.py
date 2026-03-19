@@ -164,12 +164,12 @@ if 'necesita_justificar' not in st.session_state: st.session_state.necesita_just
 st.title("📍 Asistencia Personal TRV")
 
     # Nueva lógica de verificación con estado visual
-    with st.status("Verificando ubicación GPS...", expanded=False) as status:
-        loc = get_geolocation()
-        if not loc:
-            st.warning("⚠️ Por favor, activa el GPS y permite el acceso en tu navegador.")
-            st.stop() # Esto evita que el resto de la app cargue sin GPS
-        status.update(label="📍 Ubicación confirmada", state="complete")
+with st.status("Verificando ubicación GPS...", expanded=False) as status:
+    loc = get_geolocation()
+    if not loc:
+        st.warning("⚠️ Por favor, activa el GPS y permite el acceso en tu navegador.")
+        st.stop() # Esto evita que el resto de la app cargue sin GPS
+    status.update(label="📍 Ubicación confirmada", state="complete")
     
     if loc:
         lat_act, lon_act = loc['coords']['latitude'], loc['coords']['longitude']
