@@ -196,23 +196,44 @@ if loc:
                 c2.button("📤 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True)
 
         # --- APARTADO DE JUSTIFICACIÓN (Se activa tras el registro) ---
+               # --- APARTADO DE JUSTIFICACIÓN OPTIMIZADO ---
         if st.session_state.get('necesita_justificar', False):
+            st.divider() # Separador visual
             with st.form("form_j"):
-                st.warning(f"⚠️ Justificación requerida para {st.session_state.ultimo_empleado}:")
-                motivo = st.text_input("Escribe el motivo de la incidencia (Retardo/Salida):")
-                if st.form_submit_button("Guardar Justificación"):
-                    if motivo:
+                st.warning(f"⚠️ JUSTIFICACIÓN REQUERIDA: {st.session_state.ultimo_empleado}")
+                st.info(f"Registro detectado a las: {st.session_state.ultima_hora}")
+                
+                # Usamos text_area para que tengan espacio de escribir bien
+                motivo = st.text_area("Explica el motivo de la incidencia (Retardo/Salida):", placeholder="Ej: Tráfico intenso en zona norte...")
+                
+                if st.form_submit_button("✅ Guardar y Finalizar"):
+                    if len(motivo) > 4: # Validación mínima de caracteres
+                        # Leemos datos frescos para asegurar que el registro existe
                         df_j = conn.read(ttl=0)
-                        mask = (df_j['Empleado'] == st.session_state.ultimo_empleado) & (df_j['Hora'] == st.session_state.ultima_hora)
-                        df_j.loc[mask, 'Justificacion'] = motivo
-                        conn.update(data=df_j)
-                        st.session_state.necesita_justificar = False
-                        st.success("✅ Justificación guardada. Gracias.")
-                        st.rerun()
+                        
+                        # Máscara de búsqueda precisa
+                        mask = (df_j['Empleado'] == st.session_state.ultimo_empleado) & \
+                               (df_j['Hora'] == st.session_state.ultima_hora)
+                        
+                        if mask.any():
+                            df_j.loc[mask, 'Justificacion'] = motivo
+                            conn.update(data=df_j)
+                            
+                            # Limpiamos estados para permitir nuevos registros
+                            st.session_state.necesita_justificar = False
+                            st.session_state.ultimo_empleado = None
+                            st.session_state.ultima_hora = None
+                            
+                            st.success("✅ Justificación guardada. Registro completado.")
+                            st.rerun()
+                        else:
+                            st.error("❌ Error crítico: No se encontró el registro para justificar. Contacta a sistemas.")
                     else:
-                        st.error("Por favor, escribe un motivo.")
+                        st.error("⚠️ Por favor, escribe una justificación válida (mínimo 5 letras).")
 
-    else: st.error("Fuera de rango.")
+    else: 
+        st.error("📍 Fuera de rango: Debes estar en la oficina para registrar asistencia.")
+
 
 # --- 5. PANEL ADMIN (Asegúrate de que esté al final del archivo) ---
 st.divider()
