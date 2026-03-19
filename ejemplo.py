@@ -295,15 +295,29 @@ with st.expander("🔐 Administración"):
             # Tabla de registros del día incluyendo la nueva columna Justificacion
             st.dataframe(df_h[['Empleado', 'Hora', 'Tipo', 'Estatus', 'Justificacion']], use_container_width=True)
             
-            # Botón de envío de reporte (Línea 152 original)
-            if st.button("📧 Enviar Reporte Semanal", key="btn_final_report"):
-                with st.spinner("Enviando..."):
-                    # Llama a la función definida en la Parte 1
-                    res = enviar_reporte_semanal(df_a)
-                    if res is True: 
-                        st.success("✅ Enviado con éxito.")
-                    else: 
-                        st.error(f"Error al enviar: {res}")
+                       # --- BOTÓN DE DESCARGA EXCEL ---
+            import io
+
+            # Preparar el archivo Excel en memoria
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                # Guardamos los registros de hoy en una pestaña
+                df_h.to_excel(writer, sheet_name='Asistencia_Hoy', index=False)
+                
+                # Opcional: Auto-ajustar el ancho de las columnas
+                worksheet = writer.sheets['Asistencia_Hoy']
+                for i, col in enumerate(df_h.columns):
+                    column_len = max(df_h[col].astype(str).map(len).max(), len(col)) + 2
+                    worksheet.set_column(i, i, column_len)
+
+            st.download_button(
+                label="📥 Descargar Reporte Hoy (Excel)",
+                data=buffer.getvalue(),
+                file_name=f"Asistencia_{ahora.strftime('%d_%m_%Y')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+
 
         with t2:
             # Lógica de quién no ha checado entrada hoy
