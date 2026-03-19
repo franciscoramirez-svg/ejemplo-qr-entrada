@@ -281,9 +281,6 @@ with st.status("Verificando ubicación GPS...", expanded=False) as status:
     else: 
         st.error(f"🚫 Fuera de rango: Estás a {dist/1000:.2f}km. Debes estar a menos de 100 metros.")
         if st.button("🔄 Reintentar Ubicación"):
-        else:        
-        if st.button("🔄 Actualizar mi Ubicación"):
-            
            st.rerun()
 
 # --- 5. PANEL ADMIN (Asegúrate de que esté al final del archivo) ---
