@@ -131,6 +131,17 @@ def enviar_reporte_semanal(df_registros):
         </body>
         </html>
         """
+
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        from email.mime.base import MIMEBase
+        from email import encoders
+
+        msg = MIMEMultipart()
+        msg['From'] = REMITENTE
+        msg['To'] = ", ".join(DESTINATARIOS)
+        msg['Subject'] = f"📊 Reporte Semanal de Asistencia - {hoy.strftime('%d/%m/%Y')}"
+
         msg.attach(MIMEText(html, 'html'))
 
         csv_data = df_final.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
