@@ -292,7 +292,7 @@ if st.session_state.ubicacion_ok:
                 st.rerun()
 
             # BOTÓN PARA LIMPIAR PANTALLA (Para el siguiente empleado)
-            if st.button("🔄 SIGUIENTE EMPLEADO / LIMPIAR", type="secondary", use_container_width=True):
+            if st.button("🔄 LIMPIAR", type="secondary", use_container_width=True):
                 # Opcional: Si quieres que el siguiente también valide GPS, pon ubicacion_ok en False
                 # st.session_state.ubicacion_ok = False 
                 st.rerun()
