@@ -211,7 +211,7 @@ if st.session_state.ubicacion_ok:
             
             
             # --- FUNCIÓN DE REGISTRO CON DOBLE CANDADO GPS ---
-            def registrar(tipo):
+    def registrar(tipo):
                 st.session_state.procesando = True
     
             # 1. VERIFICACIÓN DE SEGURIDAD EN TIEMPO REAL
