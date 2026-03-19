@@ -209,65 +209,79 @@ if st.session_state.ubicacion_ok:
         if data:
             st.subheader(f"👤 Empleado detectado: {data}")
             
-            # Definir función de registro dentro del flujo del empleado
-            def registrar(tipo):
+            
+            # --- FUNCIÓN DE REGISTRO CON DOBLE CANDADO GPS ---
+def registrar(tipo):
+    st.session_state.procesando = True
+    
+    # 1. VERIFICACIÓN DE SEGURIDAD EN TIEMPO REAL
+    loc_v = get_geolocation()
+    if not loc_v:
+        st.error("❌ No se pudo obtener tu ubicación actual. Revisa el GPS.")
+        st.session_state.procesando = False
+        return
 
-                 # 1. RE-VERIFICAR DISTANCIA EN EL MOMENTO EXACTO DEL CLIC
-                 loc_actual = get_geolocation()
-                 if loc_actual:
-                     lat_ahora = loc_actual['coords']['latitude']
-                     lon_ahora = loc_actual['coords']['longitude']
-                     dist_ahora = calcular_distancia(lat_ahora, lon_ahora, OFICINA_LAT, OFICINA_LON)
+    lat_v, lon_v = loc_v['coords']['latitude'], loc_v['coords']['longitude']
+    dist_v = calcular_distancia(lat_v, lon_v, OFICINA_LAT, OFICINA_LON)
+
+    # Si se movió más allá del radio permitido (ej. 100m)
+    if dist_v > RADIO_PERMITIDO:
+        st.error(f"🚫 REGISTRO DENEGADO: Te has movido fuera del área permitida ({int(dist_v)}m).")
+        st.session_state.ubicacion_ok = False # Forzamos re-validación total
+        st.session_state.procesando = False
+        return
+
+    # 2. SI LA UBICACIÓN ES CORRECTA, PROCEDER CON EL REGISTRO
+    try:
+        df_act = conn.read(ttl=0)
+        ult_reg = df_act[df_act['Empleado'] == data].tail(1)
         
-                     if dist_ahora > RADIO_PERMITIDO:
-                         st.error(f"❌ ERROR: Te has movido fuera del área. Estás a {int(dist_ahora)}m.")
-                         st.session_state.ubicacion_ok = False # Forzamos re-validación total
-                         return # Detenemos el registro
-                 else:
-                     st.error("❌ No se pudo confirmar tu ubicación actual. Intenta de nuevo.")
-                     return
-                         
-                # 2. SI ESTÁ EN RANGO, CONTINÚA EL REGISTRO NORMAL..
-
-                st.session_state.procesando = True
-                df_act = conn.read(ttl=0)
-                ult_reg = df_act[df_act['Empleado'] == data].tail(1)
-                
-                # Lógica de validación Entrada/Salida
-                if tipo == "Entrada" and not ult_reg.empty and ult_reg['Tipo'].values[0] == "Entrada":
-                    st.toast(f"⚠️ {data}, no marcaste SALIDA anterior.", icon="❌")
+        # Validación de flujo Entrada/Salida
+        if tipo == "Entrada" and not ult_reg.empty and ult_reg['Tipo'].values[0] == "Entrada":
+            st.error(f"⚠️ {data}, ya tienes una ENTRADA activa. Marca SALIDA primero.")
+        else:
+            est, min_r = "A Tiempo", 0
+            if tipo == "Entrada":
+                h_lim = datetime.strptime(HORA_ENTRADA_OFICIAL, "%H:%M:%S").time()
+                diff = (datetime.combine(date.today(), ahora.time()) - datetime.combine(date.today(), h_lim)).total_seconds() / 60
+                min_r = max(0, int(diff))
+                if min_r > 30: est = "RETARDO CRÍTICO"
+                elif min_r > UMBRAL_RETARDO_MINUTOS: est = "Retardo"
+            
+            elif tipo == "Salida":
+                h_sal = datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()
+                if ahora.time() < h_sal: 
+                    est = "SALIDA ANTICIPADA"
                 else:
-                    est, min_r = "A Tiempo", 0
-                    if tipo == "Entrada":
-                        h_lim = datetime.strptime(HORA_ENTRADA_OFICIAL, "%H:%M:%S").time()
-                        diff = (datetime.combine(date.today(), ahora.time()) - datetime.combine(date.today(), h_lim)).total_seconds() / 60
-                        min_r = max(0, int(diff))
-                        if min_r > 30: est = "RETARDO CRÍTICO"
-                        elif min_r > UMBRAL_RETARDO_MINUTOS: est = "Retardo"
-                    elif tipo == "Salida":
-                        h_sal = datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()
-                        if ahora.time() < h_sal: est = "SALIDA ANTICIPADA"
-                        else:
-                            try:
-                                df_m = conn.read(worksheet="Empleados", ttl=0)
-                                auth = (df_m.loc[df_m['Nombre'] == data, 'Autoriza_Extra'].values[0] == "SÍ")
-                                est = "Salida Autorizada" if auth else "SALIDA NO AUTORIZADA"
-                            except: est = "Salida a Tiempo"
+                    try:
+                        df_m = conn.read(worksheet="Empleados", ttl=0)
+                        auth = (df_m.loc[df_m['Nombre'] == data, 'Autoriza_Extra'].values[0] == "SÍ")
+                        est = "Salida Autorizada" if auth else "SALIDA NO AUTORIZADA"
+                    except: 
+                        est = "Salida a Tiempo"
 
-                    # Guardar registro
-                    nuevo = pd.DataFrame([[data, ahora.strftime("%d/%m/%Y %H:%M:%S"), st.session_state.lat_act, st.session_state.lon_act, tipo, est, min_r, ""]], 
-                                         columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo", "Justificacion"])
-                    conn.update(data=pd.concat([df_act, nuevo], ignore_index=True))
-                    
-                    # Activar justificación si aplica
-                    if est in ["RETARDO CRÍTICO", "Retardo", "SALIDA NO AUTORIZADA", "SALIDA ANTICIPADA"]:
-                        st.session_state.necesita_justificar = True
-                        st.session_state.ultimo_empleado = data
-                        st.session_state.ultima_hora = ahora.strftime("%d/%m/%Y %H:%M:%S")
-                    
-                    st.toast(f"✅ {tipo} registrada para {data}", icon="✔️")
-                
-                st.session_state.procesando = False
+            # Guardar en Google Sheets (Usando la ubicación del momento exacto del clic)
+            nuevo = pd.DataFrame([[
+                data, ahora.strftime("%d/%m/%Y %H:%M:%S"), 
+                lat_v, lon_v, tipo, est, min_r, ""
+            ]], columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo", "Justificacion"])
+            
+            conn.update(data=pd.concat([df_act, nuevo], ignore_index=True))
+            
+            # Activar bandera de justificación si hay incidencia
+            incidencias = ["RETARDO CRÍTICO", "Retardo", "SALIDA NO AUTORIZADA", "SALIDA ANTICIPADA"]
+            if est in incidencias:
+                st.session_state.necesita_justificar = True
+                st.session_state.ultimo_empleado = data
+                st.session_state.ultima_hora = ahora.strftime("%d/%m/%Y %H:%M:%S")
+            
+            st.success(f"✅ {tipo} registrada con éxito para {data}")
+
+    except Exception as e:
+        st.error(f"❌ Error al conectar con la base de datos: {e}")
+    
+    st.session_state.procesando = False
+
 
             # Botones de acción
             c1, c2 = st.columns(2)
