@@ -104,7 +104,17 @@ def enviar_reporte_semanal(df_registros):
         # Convertir DataFrame a HTML con estilos CSS embebidos
         html_tabla = df_final.style.apply(asignar_color, axis=1).hide(axis='index').to_html()
 
-        # Cuerpo del mensaje con diseño profesional
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        from email.mime.base import MIMEBase
+        from email import encoders
+        import smtplib
+
+        msg = MIMEMultipart()
+        msg['From'] = REMITENTE
+        msg['To'] = ", ".join(DESTINATARIOS)
+        msg['Subject'] = f"📊 Reporte Semanal de Asistencia - {hoy.strftime('%d/%m/%Y')}"
+
         html = f"""
         <html>
         <head>
@@ -129,18 +139,6 @@ def enviar_reporte_semanal(df_registros):
         """
         msg.attach(MIMEText(html, 'html'))
 
-        from email.mime.multipart import MIMEMultipart
-        from email.mime.text import MIMEText
-        from email.mime.base import MIMEBase
-        from email import encoders
-
-        msg = MIMEMultipart()
-        msg['From'] = REMITENTE
-        msg['To'] = ", ".join(DESTINATARIOS)
-        msg['Subject'] = f"📊 Reporte Semanal de Asistencia - {hoy.strftime('%d/%m/%Y')}"
-
-        msg.attach(MIMEText(html, 'html'))
-
         csv_data = df_final.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(csv_data)
@@ -153,7 +151,6 @@ def enviar_reporte_semanal(df_registros):
             s.sendmail(REMITENTE, DESTINATARIOS, msg.as_string())
         return True
     except Exception as e: return str(e)
-
 
 # --- 3. LÓGICA DE DISTANCIA ---
 
