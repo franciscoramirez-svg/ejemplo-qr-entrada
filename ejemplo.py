@@ -112,25 +112,22 @@ def enviar_reporte_semanal(df_registros):
                 body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; }}
                 h2 {{ color: #1a237e; border-bottom: 2px solid #1a237e; padding-bottom: 10px; }}
                 .container {{ padding: 20px; }}
-                table {{ border-collapse: collapse; width: 100%; margin-top: 20px; font-size: 13px; }}
-                th {{ background-color: #1a237e; color: white; padding: 12px; text-align: left; }}
-                td {{ padding: 10px; }}
                 .footer {{ margin-top: 30px; font-size: 11px; color: #777; font-style: italic; }}
             </style>
         </head>
         <body>
             <div class="container">
                 <h2>📊 Auditoría de Asistencia Semanal - TRV</h2>
-                <p>Resumen detallado de los últimos 7 días (al {hoy.strftime('%d/%m/%Y')}):</p>
-                {html_tabla}
+                <p>Se ha generado el reporte detallado de los últimos 7 días (al {hoy.strftime('%d/%m/%Y')}).</p>
+                <p><strong>Nota:</strong> Los detalles de cada empleado se encuentran adjuntos en el archivo CSV que acompaña a este correo.</p>
                 <div class="footer">
-                    <p>Este reporte se generó automáticamente desde el sistema NEOMOTIC Access.<br>
-                    Los días marcados en ROJO requieren revisión inmediata del administrador.</p>
+                    <p>Este reporte se generó automáticamente desde el sistema NEOMOTIC Access.</p>
                 </div>
             </div>
         </body>
         </html>
         """
+        msg.attach(MIMEText(html, 'html'))
 
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
@@ -146,7 +143,8 @@ def enviar_reporte_semanal(df_registros):
 
         csv_data = df_final.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
         part = MIMEBase('application', 'octet-stream')
-        part.set_payload(csv_data); encoders.encode_base64(part)
+        part.set_payload(csv_data)
+        encoders.encode_base64(part)
         part.add_header('Content-Disposition', f'attachment; filename="Reporte_Asistencia_TRV.csv"')
         msg.attach(part)
 
