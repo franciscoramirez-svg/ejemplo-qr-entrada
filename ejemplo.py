@@ -212,75 +212,75 @@ if st.session_state.ubicacion_ok:
             
             # --- FUNCIÓN DE REGISTRO CON DOBLE CANDADO GPS ---
             def registrar(tipo):
-                   st.session_state.procesando = True
+                st.session_state.procesando = True
     
             # 1. VERIFICACIÓN DE SEGURIDAD EN TIEMPO REAL
-           loc_v = get_geolocation()
-           if not loc_v:
+                loc_v = get_geolocation()
+                if not loc_v:
                     st.error("❌ No se pudo obtener tu ubicación actual. Revisa el GPS.")
                     st.session_state.procesando = False
-                   return
+                    return
 
-          lat_v, lon_v = loc_v['coords']['latitude'], loc_v['coords']['longitude']
-          dist_v = calcular_distancia(lat_v, lon_v, OFICINA_LAT, OFICINA_LON)
+                lat_v, lon_v = loc_v['coords']['latitude'], loc_v['coords']['longitude']
+                dist_v = calcular_distancia(lat_v, lon_v, OFICINA_LAT, OFICINA_LON)
 
     # Si se movió más allá del radio permitido (ej. 100m)
-          if dist_v > RADIO_PERMITIDO:
-                    st.error(f"🚫 REGISTRO DENEGADO: Te has movido fuera del área permitida ({int(dist_v)}m).")
-                    st.session_state.ubicacion_ok = False # Forzamos re-validación total
-                    st.session_state.procesando = False
+                if dist_v > RADIO_PERMITIDO:
+                   st.error(f"🚫 REGISTRO DENEGADO: Te has movido fuera del área permitida ({int(dist_v)}m).")
+                   st.session_state.ubicacion_ok = False # Forzamos re-validación total
+                   st.session_state.procesando = False
                    return
 
     # 2. SI LA UBICACIÓN ES CORRECTA, PROCEDER CON EL REGISTRO
-          try:
-             df_act = conn.read(ttl=0)
-             ult_reg = df_act[df_act['Empleado'] == data].tail(1)
+                try:
+                    df_act = conn.read(ttl=0)
+                    ult_reg = df_act[df_act['Empleado'] == data].tail(1)
         
         # Validación de flujo Entrada/Salida
-              if tipo == "Entrada" and not ult_reg.empty and ult_reg['Tipo'].values[0] == "Entrada":
-                 st.error(f"⚠️ {data}, ya tienes una ENTRADA activa. Marca SALIDA primero.")
-              else:
-                  est, min_r = "A Tiempo", 0
-                  if tipo == "Entrada":
-                     h_lim = datetime.strptime(HORA_ENTRADA_OFICIAL, "%H:%M:%S").time()
-                     diff = (datetime.combine(date.today(), ahora.time()) - datetime.combine(date.today(), h_lim)).total_seconds() / 60
-                     min_r = max(0, int(diff))
-                  if min_r > 30: est = "RETARDO CRÍTICO"
-                  elif min_r > UMBRAL_RETARDO_MINUTOS: est = "Retardo"
+                    if tipo == "Entrada" and not ult_reg.empty and ult_reg['Tipo'].values[0] == "Entrada":
+                       st.error(f"⚠️ {data}, ya tienes una ENTRADA activa. Marca SALIDA primero.")
+                    else:
+                       est, min_r = "A Tiempo", 0
+                       if tipo == "Entrada":
+                          h_lim = datetime.strptime(HORA_ENTRADA_OFICIAL, "%H:%M:%S").time()
+                          diff = (datetime.combine(date.today(), ahora.time()) - datetime.combine(date.today(), h_lim)).total_seconds() / 60
+                          min_r = max(0, int(diff))
+                          if min_r > 30: est = "RETARDO CRÍTICO"
+                          elif min_r > UMBRAL_RETARDO_MINUTOS: est = "Retardo"
             
-               elif tipo == "Salida":
-                h_sal = datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()
-                if ahora.time() < h_sal: 
-                    est = "SALIDA ANTICIPADA"
-                else:
-                    try:
-                        df_m = conn.read(worksheet="Empleados", ttl=0)
-                        auth = (df_m.loc[df_m['Nombre'] == data, 'Autoriza_Extra'].values[0] == "SÍ")
-                        est = "Salida Autorizada" if auth else "SALIDA NO AUTORIZADA"
-                    except: 
-                        est = "Salida a Tiempo"
+                       elif tipo == "Salida":
+                            h_sal = datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()
+                            if ahora.time() < h_sal: 
+                                est = "SALIDA ANTICIPADA"
+                            else:
+                                try:
+                                    df_m = conn.read(worksheet="Empleados", ttl=0)
+                                    auth = (df_m.loc[df_m['Nombre'] == data, 'Autoriza_Extra'].values[0] == "SÍ")
+                                    est = "Salida Autorizada" if auth else "SALIDA NO AUTORIZADA"
+                                except: 
+                                    est = "Salida a Tiempo"
 
             # Guardar en Google Sheets (Usando la ubicación del momento exacto del clic)
-                 nuevo = pd.DataFrame([[
-                         data, ahora.strftime("%d/%m/%Y %H:%M:%S"), 
-                         lat_v, lon_v, tipo, est, min_r, ""
-                  ]], columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo", "Justificacion"])
+                       nuevo = pd.DataFrame([[
+                           data, ahora.strftime("%d/%m/%Y %H:%M:%S"), 
+                           lat_v, lon_v, tipo, est, min_r, ""
+                       ]], columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo", "Justificacion"])
             
-                 conn.update(data=pd.concat([df_act, nuevo], ignore_index=True))
+                       conn.update(data=pd.concat([df_act, nuevo], ignore_index=True))
             
             # Activar bandera de justificación si hay incidencia
-                 incidencias = ["RETARDO CRÍTICO", "Retardo", "SALIDA NO AUTORIZADA", "SALIDA ANTICIPADA"]
-                 if est in incidencias:
+                       incidencias = ["RETARDO CRÍTICO", "Retardo", "SALIDA NO AUTORIZADA", "SALIDA ANTICIPADA"]
+                       if est in incidencias:
                            st.session_state.necesita_justificar = True
                            st.session_state.ultimo_empleado = data
                            st.session_state.ultima_hora = ahora.strftime("%d/%m/%Y %H:%M:%S")
             
-                           st.success(f"✅ {tipo} registrada con éxito para {data}")
+                       st.success(f"✅ {tipo} registrada con éxito para {data}")
 
                 except Exception as e:
-                                      st.error(f"❌ Error al conectar con la base de datos: {e}")
+                           st.error(f"❌ Error al conectar con la base de datos: {e}")
     
-                                     st.session_state.procesando = False
+                st.session_state.procesando = False
 
 
             # Botones de acción
