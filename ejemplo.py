@@ -312,7 +312,7 @@ with st.expander("🔐 Administración"):
             st.dataframe(df_h[['Empleado', 'Hora', 'Tipo', 'Estatus', 'Justificacion']], use_container_width=True)
             
                        # --- BOTÓN DE DESCARGA EXCEL ---
-           import io
+            import io
             buffer = io.BytesIO()
             # Usamos xlsxwriter para que el archivo sea compatible con todo
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
