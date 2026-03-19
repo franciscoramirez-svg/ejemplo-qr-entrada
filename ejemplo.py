@@ -161,14 +161,23 @@ ahora = datetime.now(zona_veracruz)
 if 'procesando' not in st.session_state: st.session_state.procesando = False
 if 'necesita_justificar' not in st.session_state: st.session_state.necesita_justificar = False
 
-st.title("📍 Asistencia Personal TRV")
+    st.title("📍 Asistencia Personal TRV")
 
-loc = get_geolocation()
-if loc:
-    lat_act, lon_act = loc['coords']['latitude'], loc['coords']['longitude']
-    dist = calcular_distancia(lat_act, lon_act, OFICINA_LAT, OFICINA_LON)
+    # Nueva lógica de verificación con estado visual
+    with st.status("Verificando ubicación GPS...", expanded=False) as status:
+        loc = get_geolocation()
+        if not loc:
+            st.warning("⚠️ Por favor, activa el GPS y permite el acceso en tu navegador.")
+            st.stop() # Esto evita que el resto de la app cargue sin GPS
+        status.update(label="📍 Ubicación confirmada", state="complete")
     
-    if dist <= RADIO_PERMITIDO:
+    if loc:
+        lat_act, lon_act = loc['coords']['latitude'], loc['coords']['longitude']
+        dist = calcular_distancia(lat_act, lon_act, OFICINA_LAT, OFICINA_LON)
+    
+        if dist <= RADIO_PERMITIDO:
+        st.success(f"✅ Estás a {int(dist)}m de la oficina. Puedes registrarte.")
+    
         foto = st.camera_input("Escanea QR")
         if foto and not st.session_state.procesando:
             img = cv2.imdecode(np.asarray(bytearray(foto.getvalue()), dtype=np.uint8), 1)
@@ -231,8 +240,9 @@ if loc:
                 c1.button("📥 ENTRADA", on_click=registrar, args=("Entrada",), use_container_width=True)
                 c2.button("📤 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True)
 
-        # --- APARTADO DE JUSTIFICACIÓN (Se activa tras el registro) ---
-               # --- APARTADO DE JUSTIFICACIÓN OPTIMIZADO ---
+         
+               # --- APARTADO DE JUSTIFICACIÓN (Se activa tras el registro)  ---
+        
         if st.session_state.get('necesita_justificar', False):
             st.divider() # Separador visual
             with st.form("form_j"):
@@ -268,10 +278,15 @@ if loc:
                         st.error("⚠️ Por favor, escribe una justificación válida (mínimo 5 letras).")
 
     else: 
-        st.error("📍 Fuera de rango: Debes estar en la oficina para registrar asistencia.")
-
+        st.error(f"🚫 Fuera de rango: Estás a {dist/1000:.2f}km. Debes estar a menos de 100 metros.")
+        if st.button("🔄 Reintentar Ubicación"):
+        else:        
+        if st.button("🔄 Actualizar mi Ubicación"):
+            
+           st.rerun()
 
 # --- 5. PANEL ADMIN (Asegúrate de que esté al final del archivo) ---
+
 st.divider()
 with st.expander("🔐 Administración"):
     # Input de contraseña para proteger los datos
@@ -332,13 +347,14 @@ with st.expander("🔐 Administración"):
                 st.info("Carga la lista de nombres en la pestaña 'Empleados' para ver faltantes.")
 
         with t3:
-            # Mapa de registros con GPS
-            pts = df_h.dropna(subset=['Lat', 'Lon']).copy()
-            if not pts.empty:
-                pts = pts.rename(columns={'Lat': 'lat', 'Lon': 'lon'})
-                st.map(pts[['lat', 'lon']])
-            else: 
-                st.info("Sin coordenadas registradas hoy.")
+            
+           pts = df_h.dropna(subset=['Lat', 'Lon']).copy()
+           if not pts.empty:
+               pts = pts.rename(columns={'Lat': 'lat', 'Lon': 'lon'})
+        # Mostramos un mapa con puntos más grandes y color
+               st.map(pts, size=20, color='#0000FF') 
+           else: 
+               st.info("Sin registros con GPS hoy.")
 
         with t4:
             # Generador de códigos QR para nuevos empleados
