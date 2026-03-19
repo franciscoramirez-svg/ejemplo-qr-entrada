@@ -184,10 +184,10 @@ with st.status("Verificando ubicación GPS...", expanded=False) as status:
               data, _, _ = cv2.QRCodeDetector().detectAndDecode(img)
               data, bbox, _ = cv2.QRCodeDetector().detectAndDecode(img)
                
-            if data:
+           if data:
                 st.success(f"📱 QR Detectado: {data}") # Feedback inmediato para el usuario
             
-            if data:
+           if data:
                 df_act = conn.read(ttl=0)
                 
                 def registrar(tipo):
