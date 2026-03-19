@@ -209,64 +209,52 @@ if st.session_state.ubicacion_ok:
         if data:
             st.subheader(f"👤 Empleado detectado: {data}")
             
-            
-            # --- FUNCIÓN DE REGISTRO CON DOBLE CANDADO GPS ---
-    # --- 1. MOVER LA FUNCIÓN REGISTRAR AL PRINCIPIO (Fuera de todo) ---
-def registrar(tipo, empleado_nombre, lat_v, lon_v):
-    st.session_state.procesando = True
-    ahora_reg = datetime.now(zona_veracruz)
-    
-    # Validación de distancia al momento del clic
-    dist_v = calcular_distancia(lat_v, lon_v, OFICINA_LAT, OFICINA_LON)
-    if dist_v > RADIO_PERMITIDO:
-        st.error(f"🚫 FUERA DE RANGO: {int(dist_v)}m. Registro cancelado.")
-        st.session_state.ubicacion_ok = False
-        return
+            # Definir función de registro dentro del flujo del empleado
+            def registrar(tipo):
+                st.session_state.procesando = True
+                df_act = conn.read(ttl=0)
+                ult_reg = df_act[df_act['Empleado'] == data].tail(1)
+                
+                # Lógica de validación Entrada/Salida
+                if tipo == "Entrada" and not ult_reg.empty and ult_reg['Tipo'].values[0] == "Entrada":
+                    st.toast(f"⚠️ {data}, no marcaste SALIDA anterior.", icon="❌")
+                else:
+                    est, min_r = "A Tiempo", 0
+                    if tipo == "Entrada":
+                        h_lim = datetime.strptime(HORA_ENTRADA_OFICIAL, "%H:%M:%S").time()
+                        diff = (datetime.combine(date.today(), ahora.time()) - datetime.combine(date.today(), h_lim)).total_seconds() / 60
+                        min_r = max(0, int(diff))
+                        if min_r > 30: est = "RETARDO CRÍTICO"
+                        elif min_r > UMBRAL_RETARDO_MINUTOS: est = "Retardo"
+                    elif tipo == "Salida":
+                        h_sal = datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()
+                        if ahora.time() < h_sal: est = "SALIDA ANTICIPADA"
+                        else:
+                            try:
+                                df_m = conn.read(worksheet="Empleados", ttl=0)
+                                auth = (df_m.loc[df_m['Nombre'] == data, 'Autoriza_Extra'].values[0] == "SÍ")
+                                est = "Salida Autorizada" if auth else "SALIDA NO AUTORIZADA"
+                            except: est = "Salida a Tiempo"
 
-    try:
-        df_act = conn.read(ttl=0)
-        # ... (Tu lógica de Horarios y Estatus que ya tienes) ...
-        
-        # Ejemplo rápido de guardado:
-        nuevo = pd.DataFrame([[empleado_nombre, ahora_reg.strftime("%d/%m/%Y %H:%M:%S"), lat_v, lon_v, tipo, "A Tiempo", 0, ""]], 
-                             columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo", "Justificacion"])
-        conn.update(data=pd.concat([df_act, nuevo], ignore_index=True))
-        
-        st.success(f"✅ {tipo} registrada para {empleado_nombre}")
-        st.session_state.qr_detectado = None # Limpiamos para el siguiente
-    except Exception as e:
-        st.error(f"Error: {e}")
-    
-    st.session_state.procesando = False
+                    # Guardar registro
+                    nuevo = pd.DataFrame([[data, ahora.strftime("%d/%m/%Y %H:%M:%S"), st.session_state.lat_act, st.session_state.lon_act, tipo, est, min_r, ""]], 
+                                         columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo", "Justificacion"])
+                    conn.update(data=pd.concat([df_act, nuevo], ignore_index=True))
+                    
+                    # Activar justificación si aplica
+                    if est in ["RETARDO CRÍTICO", "Retardo", "SALIDA NO AUTORIZADA", "SALIDA ANTICIPADA"]:
+                        st.session_state.necesita_justificar = True
+                        st.session_state.ultimo_empleado = data
+                        st.session_state.ultima_hora = ahora.strftime("%d/%m/%Y %H:%M:%S")
+                    
+                    st.toast(f"✅ {tipo} registrada para {data}", icon="✔️")
+                
+                st.session_state.procesando = False
 
-# --- 2. EN LA PARTE DE LA INTERFAZ ---
-if st.session_state.ubicacion_ok:
-    foto = st.camera_input("Escanea QR")
-    
-    if foto:
-        img = cv2.imdecode(np.asarray(bytearray(foto.getvalue()), dtype=np.uint8), 1)
-        data, _, _ = cv2.QRCodeDetector().detectAndDecode(img)
-        
-        if data:
-            st.session_state.qr_detectado = data
-
-    # Si hay un QR detectado, mostramos los botones
-    if 'qr_detectado' in st.session_state and st.session_state.qr_detectado:
-        st.subheader(f"👤 Empleado: {st.session_state.qr_detectado}")
-        
-        col1, col2 = st.columns(2)
-        # Pasamos los parámetros necesarios a la función
-        col1.button("📥 ENTRADA", on_click=registrar, 
-                    args=("Entrada", st.session_state.qr_detectado, st.session_state.lat_act, st.session_state.lon_act))
-        
-        col2.button("📤 SALIDA", on_click=registrar, 
-                    args=("Salida", st.session_state.qr_detectado, st.session_state.lat_act, st.session_state.lon_act))
-
-        # BOTÓN LIMPIAR (Este siempre debe funcionar)
-        if st.button("🔄 SIGUIENTE / LIMPIAR"):
-            st.session_state.qr_detectado = None
-            st.rerun()
-
+            # Botones de acción
+            c1, c2 = st.columns(2)
+            c1.button("📥 ENTRADA", on_click=registrar, args=("Entrada",), use_container_width=True)
+            c2.button("📤 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True)
 
             # --- PASO 3: FORMULARIO DE JUSTIFICACIÓN (Fuera de la cámara) ---
     if st.session_state.necesita_justificar:
@@ -381,4 +369,3 @@ with st.expander("🔐 Administración"):
                 buf = BytesIO()
                 qr.make_image(fill_color="black", back_color="white").save(buf, format="PNG")
                 st.image(buf.getvalue(), caption=f"QR de {emp_sel}", width=250)
-
