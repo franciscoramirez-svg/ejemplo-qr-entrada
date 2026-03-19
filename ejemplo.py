@@ -88,15 +88,48 @@ def enviar_reporte_semanal(df_registros):
         df_final = pd.DataFrame(reporte_data)
 
         # Enviar Correo
-        msg = MIMEMultipart()
-        msg['Subject'] = f"📊 Reporte de Asistencia TRV - {hoy.strftime('%d/%m/%Y')}"
-        
+        # --- GENERACIÓN DE ESTILOS VISUALES PARA EL CORREO ---
+        def asignar_color(row):
+            est = str(row['Estatus']).upper()
+            # Rojo para faltas o alertas graves
+            if "DÍA NO LABORADO" in est or "RETARDO CRÍTICO" in est or "SALIDA NO AUTORIZADA" in est:
+                return ['background-color: #f8d7da; color: #721c24; font-weight: bold; border: 1px solid #f5c6cb'] * len(row)
+            # Amarillo para incidencias leves
+            elif "RETARDO" in est or "SALIDA ANTICIPADA" in est or "MISSING" in str(row['Entrada']):
+                return ['background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba'] * len(row)
+            # Verde para asistencia correcta
+            else:
+                return ['background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb'] * len(row)
+
+        # Convertir DataFrame a HTML con estilos CSS embebidos
+        html_tabla = df_final.style.apply(asignar_color, axis=1).hide(axis='index').to_html()
+
+        # Cuerpo del mensaje con diseño profesional
         html = f"""
-        <html><body>
-            <h2>Auditoría de Asistencia Semanal</h2>
-            <p>Se detallan los días laborados y los días sin registro (DÍA NO LABORADO).</p>
-            {df_final.tail(15).to_html(index=False)}
-        </body></html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; }}
+                h2 {{ color: #1a237e; border-bottom: 2px solid #1a237e; padding-bottom: 10px; }}
+                .container {{ padding: 20px; }}
+                table {{ border-collapse: collapse; width: 100%; margin-top: 20px; font-size: 13px; }}
+                th {{ background-color: #1a237e; color: white; padding: 12px; text-align: left; }}
+                td {{ padding: 10px; }}
+                .footer {{ margin-top: 30px; font-size: 11px; color: #777; font-style: italic; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h2>📊 Auditoría de Asistencia Semanal - TRV</h2>
+                <p>Resumen detallado de los últimos 7 días (al {hoy.strftime('%d/%m/%Y')}):</p>
+                {html_tabla}
+                <div class="footer">
+                    <p>Este reporte se generó automáticamente desde el sistema NEOMOTIC Access.<br>
+                    Los días marcados en ROJO requieren revisión inmediata del administrador.</p>
+                </div>
+            </div>
+        </body>
+        </html>
         """
         msg.attach(MIMEText(html, 'html'))
 
