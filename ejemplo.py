@@ -173,6 +173,9 @@ if loc:
         if foto and not st.session_state.procesando:
             img = cv2.imdecode(np.asarray(bytearray(foto.getvalue()), dtype=np.uint8), 1)
             data, _, _ = cv2.QRCodeDetector().detectAndDecode(img)
+            data, bbox, _ = cv2.QRCodeDetector().detectAndDecode(img)
+            if data:
+                 st.success(f"📱 QR Detectado: {data}") # Feedback inmediato para el usuario
             
             if data:
                 df_act = conn.read(ttl=0)
@@ -296,15 +299,12 @@ with st.expander("🔐 Administración"):
             st.dataframe(df_h[['Empleado', 'Hora', 'Tipo', 'Estatus', 'Justificacion']], use_container_width=True)
             
                        # --- BOTÓN DE DESCARGA EXCEL ---
-            import io
-
-            # Preparar el archivo Excel en memoria
+           import io
             buffer = io.BytesIO()
+            # Usamos xlsxwriter para que el archivo sea compatible con todo
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                # Guardamos los registros de hoy en una pestaña
                 df_h.to_excel(writer, sheet_name='Asistencia_Hoy', index=False)
-                
-                # Opcional: Auto-ajustar el ancho de las columnas
+                # Auto-ajuste de columnas para que se vea ordenado
                 worksheet = writer.sheets['Asistencia_Hoy']
                 for i, col in enumerate(df_h.columns):
                     column_len = max(df_h[col].astype(str).map(len).max(), len(col)) + 2
