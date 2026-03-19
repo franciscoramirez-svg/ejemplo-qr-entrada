@@ -221,13 +221,13 @@ if st.session_state.ubicacion_ok:
                 else:
                     est, min_r = "A Tiempo", 0
                     if tipo == "Entrada":
-                        h_lim = datetime.strptime(HORA_ENTRADA_OFFICIAL, "%H:%M:%S").time()
+                        h_lim = datetime.strptime(HORA_ENTRADA_OFICIAL, "%H:%M:%S").time()
                         diff = (datetime.combine(date.today(), ahora.time()) - datetime.combine(date.today(), h_lim)).total_seconds() / 60
                         min_r = max(0, int(diff))
                         if min_r > 30: est = "RETARDO CRÍTICO"
                         elif min_r > UMBRAL_RETARDO_MINUTOS: est = "Retardo"
                     elif tipo == "Salida":
-                        h_sal = datetime.strptime(HORA_SALIDA_OFFICIAL, "%H:%M:%S").time()
+                        h_sal = datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()
                         if ahora.time() < h_sal: est = "SALIDA ANTICIPADA"
                         else:
                             try:
