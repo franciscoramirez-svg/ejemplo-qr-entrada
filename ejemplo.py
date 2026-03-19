@@ -211,6 +211,24 @@ if st.session_state.ubicacion_ok:
             
             # Definir función de registro dentro del flujo del empleado
             def registrar(tipo):
+
+                 # 1. RE-VERIFICAR DISTANCIA EN EL MOMENTO EXACTO DEL CLIC
+                 loc_actual = get_geolocation()
+                 if loc_actual:
+                     lat_ahora = loc_actual['coords']['latitude']
+                     lon_ahora = loc_actual['coords']['longitude']
+                     dist_ahora = calcular_distancia(lat_ahora, lon_ahora, OFICINA_LAT, OFICINA_LON)
+        
+                     if dist_ahora > RADIO_PERMITIDO:
+                         st.error(f"❌ ERROR: Te has movido fuera del área. Estás a {int(dist_ahora)}m.")
+                         st.session_state.ubicacion_ok = False # Forzamos re-validación total
+                         return # Detenemos el registro
+                 else:
+                     st.error("❌ No se pudo confirmar tu ubicación actual. Intenta de nuevo.")
+                     return
+                         
+                # 2. SI ESTÁ EN RANGO, CONTINÚA EL REGISTRO NORMAL..
+
                 st.session_state.procesando = True
                 df_act = conn.read(ttl=0)
                 ult_reg = df_act[df_act['Empleado'] == data].tail(1)
