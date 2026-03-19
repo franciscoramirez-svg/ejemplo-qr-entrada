@@ -161,7 +161,7 @@ ahora = datetime.now(zona_veracruz)
 if 'procesando' not in st.session_state: st.session_state.procesando = False
 if 'necesita_justificar' not in st.session_state: st.session_state.necesita_justificar = False
 
-    st.title("📍 Asistencia Personal TRV")
+st.title("📍 Asistencia Personal TRV")
 
     # Nueva lógica de verificación con estado visual
     with st.status("Verificando ubicación GPS...", expanded=False) as status:
