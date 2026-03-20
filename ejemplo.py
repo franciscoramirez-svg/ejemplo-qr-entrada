@@ -291,14 +291,21 @@ if st.session_state.ubicacion_ok:
             motivo = st.text_area("Explica el motivo de la incidencia:")
             if st.form_submit_button("✅ Guardar y Finalizar"):
                 if len(motivo) > 4:
-                    df_j = conn.read(ttl=0)
-                    mask = (df_j['Empleado'] == st.session_state.ultimo_empleado) & (df_j['Hora'] == st.session_state.ultima_hora)
-                    if mask.any():
-                        df_j.loc[mask, 'Justificacion'] = motivo
-                        conn.update(data=df_j)
+                    try:
+                        response = supabase.table("registros").update({
+                            "justificacion": motivo
+                        }).eq("empleado", st.session_state.ultimo_empleado)\
+                          .order("fecha_hora", desc=True)\
+                          .limit(1)\
+                          .execute()
+                    
+                        st.success("✅ Justificación guardada en Supabase")
                         st.session_state.necesita_justificar = False
-                        st.success("✅ Justificación guardada.")
                         st.rerun()
+                    
+                    except Exception as e:
+                        st.error(f"❌ Error al guardar justificación: {e}")
+
                 else:
                     st.error("⚠️ Escribe un motivo más detallado.")
 
