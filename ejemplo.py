@@ -245,18 +245,26 @@ if st.session_state.ubicacion_ok:
                     # Guardar registro
                     nuevo = pd.DataFrame([[data, ahora.strftime("%d/%m/%Y %H:%M:%S"), st.session_state.lat_act, st.session_state.lon_act, tipo, est, min_r, ""]], 
                                          columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo", "Justificacion"])
-
-                    supabase.table("registros").insert({
-                        "empleado": data,
-                        "fecha_hora": ahora.strftime("%Y-%m-%d %H:%M:%S"),
-                        "lat": st.session_state.lat_act,
-                        "lon": st.session_state.lon_act,
-                        "tipo": tipo,
-                        "estatus": est,
-                        "min_retardo": min_r,
-                        "justificacion": ""
-                    }).execute()
                     
+                    try:
+                        ahora = datetime.now(zona_veracruz)
+                    
+                        response = supabase.table("registros").insert({
+                            "empleado": data,
+                            "fecha_hora": ahora.strftime("%Y-%m-%d %H:%M:%S"),
+                            "lat": st.session_state.lat_act,
+                            "lon": st.session_state.lon_act,
+                            "tipo": tipo,
+                            "estatus": est,
+                            "min_retardo": min_r,
+                            "justificacion": ""
+                        }).execute()
+                    
+                        st.success("✅ Guardado en Supabase")
+                        st.write(response)
+                    
+                    except Exception as e:
+                        st.error(f"❌ Error al guardar: {e}")
                     
                     # Activar justificación si aplica
                     if est in ["RETARDO CRÍTICO", "Retardo", "SALIDA NO AUTORIZADA", "SALIDA ANTICIPADA"]:
