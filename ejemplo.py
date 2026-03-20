@@ -15,6 +15,12 @@ from email import encoders
 import urllib.parse
 import qrcode
 from io import BytesIO
+from supabase import create_client
+
+url = st.secrets["SUPABASE_URL"]
+key = st.secrets["SUPABASE_KEY"]
+
+supabase = create_client(url, key)
 
 # --- 1. CONFIGURACIÓN INICIAL ---
 zona_veracruz = pytz.timezone('America/Mexico_City')
