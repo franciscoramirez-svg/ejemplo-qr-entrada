@@ -217,6 +217,8 @@ if st.session_state.ubicacion_ok:
             
             # Definir función de registro dentro del flujo del empleado
             def registrar(tipo):
+                ahora = datetime.now(zona_veracruz) 
+                
                 st.session_state.procesando = True
                 df_act = conn.read(ttl=0)
                 ult_reg = df_act[df_act['Empleado'] == data].tail(1)
