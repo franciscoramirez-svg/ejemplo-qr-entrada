@@ -215,7 +215,7 @@ if st.session_state.ubicacion_ok:
         if data:
             st.subheader(f"👤 Empleado detectado: {data}")
             
-            # Definir función de registro dentro del flujo del empleado
+                    # Definir función de registro dentro del flujo del empleado
             def registrar(tipo):
                 ahora = datetime.now(zona_veracruz) 
                 
@@ -262,11 +262,12 @@ if st.session_state.ubicacion_ok:
                             "justificacion": ""
                         }).execute()
                     
-                        st.success("✅ Guardado en Supabase")
+                        st.success("✅ INTENTO DE GUARDADO")
+                        st.write("Respuesta Supabase:")
                         st.write(response)
                     
                     except Exception as e:
-                        st.error(f"❌ Error al guardar: {e}")
+                        st.error(f"❌ ERROR REAL: {e}")
                     
                     # Activar justificación si aplica
                     if est in ["RETARDO CRÍTICO", "Retardo", "SALIDA NO AUTORIZADA", "SALIDA ANTICIPADA"]:
