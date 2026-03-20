@@ -301,7 +301,7 @@ if st.session_state.ubicacion_ok:
                     st.session_state.necesita_justificar = False
                     st.rerun()
                 
-                except Exception as e:
+                   except Exception as e:
                     st.error(f"❌ Error al guardar justificación: {e}")
 
                 else:
