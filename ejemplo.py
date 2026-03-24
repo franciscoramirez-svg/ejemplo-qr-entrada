@@ -23,8 +23,11 @@ def distancia(lat1, lon1, lat2, lon2):
     return (2 * asin(sqrt(a))) * 6371000
 
 def obtener_registros():
-    res = supabase.table("registros").select("*").execute()
-    return pd.DataFrame(res.data)
+    try:
+        res = supabase.table("registros").select("*").execute()
+        return pd.DataFrame(res.data)
+    except:
+        return pd.DataFrame()
 
 def validar_ubicacion(user):
     loc = get_geolocation()
@@ -34,19 +37,25 @@ def validar_ubicacion(user):
     lat = loc['coords']['latitude']
     lon = loc['coords']['longitude']
 
-    suc = supabase.table("sucursales").select("*").eq("id", user['sucursal_id']).execute().data[0]
+    suc = supabase.table("sucursales")\
+        .select("*")\
+        .eq("id", user['sucursal_id'])\
+        .execute().data[0]
 
     dist = distancia(lat, lon, suc['lat'], suc['lon'])
 
     if dist <= suc['radio']:
         return True, (lat, lon)
+
     return False, f"Fuera de sucursal ({int(dist)}m)"
 
-# --- SESSION ---
+# --- SESSION STATE ---
 if 'user' not in st.session_state:
     st.session_state.user = None
+
 if 'justificar' not in st.session_state:
     st.session_state.justificar = False
+
 if 'hora_registro' not in st.session_state:
     st.session_state.hora_registro = ""
 
@@ -80,7 +89,7 @@ if not st.session_state.user:
     st.stop()
 
 # =========================
-# 👤 USUARIO LOGEADO
+# 👤 USUARIO
 # =========================
 user = st.session_state.user
 st.success(f"👤 {user['nombre']}")
@@ -90,7 +99,7 @@ if st.button("Cerrar sesión"):
     st.rerun()
 
 # =========================
-# 📍 BOTONES DE REGISTRO
+# 📍 REGISTRO
 # =========================
 def registrar(tipo):
     ahora = datetime.now(zona)
@@ -101,6 +110,14 @@ def registrar(tipo):
         return
 
     lat, lon = ubic
+
+    # ⚠️ evitar duplicado inmediato
+    df = obtener_registros()
+    if not df.empty:
+        ult = df[df['empleado'] == user['nombre']].tail(1)
+        if not ult.empty and ult['tipo'].values[0] == tipo:
+            st.warning("⚠️ Ya registraste este movimiento")
+            return
 
     est = "A Tiempo"
     min_r = 0
@@ -150,6 +167,7 @@ col2.button("📤 SALIDA", on_click=registrar, args=("Salida",))
 # =========================
 if st.session_state.justificar:
     st.divider()
+
     with st.form("just"):
         motivo = st.text_area("Justificación requerida")
 
@@ -161,8 +179,11 @@ if st.session_state.justificar:
                   .eq("fecha_hora", st.session_state.hora_registro)\
                   .execute()
 
-                st.success("Guardado")
+                st.success("✅ Justificación guardada")
+
                 st.session_state.justificar = False
+                st.session_state.hora_registro = ""
+
                 st.rerun()
             else:
                 st.error("Escribe más detalle")
@@ -178,10 +199,10 @@ df = obtener_registros()
 if not df.empty:
     df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
     df_user = df[df['empleado'] == user['nombre']].sort_values("fecha_hora", ascending=False)
-    st.dataframe(df_user)
+    st.dataframe(df_user, use_container_width=True)
 
 # =========================
-# 🧠 DASHBOARD ADMIN
+# 🧠 DASHBOARD EMPRESA
 # =========================
 st.divider()
 with st.expander("🔐 Panel empresa"):
@@ -197,75 +218,59 @@ with st.expander("🔐 Panel empresa"):
 
             hoy = df[df['fecha_hora'].dt.date == datetime.now().date()]
 
-            # KPIs
             st.subheader("📊 Indicadores")
             st.metric("Registros hoy", len(hoy))
-            st.metric("Retardos", len(hoy[hoy['estatus'].str.contains("Retardo")]))
+            st.metric("Retardos", len(hoy[hoy['estatus'].str.contains("Retardo", na=False)]))
 
-            # Tabla
             st.subheader("📋 Hoy")
-            st.dataframe(hoy)
+            st.dataframe(hoy, use_container_width=True)
 
-            # Ranking
             st.subheader("🏆 Ranking puntualidad")
             ranking = df.groupby("empleado")['min_retardo'].sum().sort_values()
             st.bar_chart(ranking)
 
-            # Mapa
             st.subheader("🗺️ Ubicaciones")
             pts = hoy.dropna(subset=['lat', 'lon'])
             if not pts.empty:
                 st.map(pts)
 
+# =========================
+# 📦 CARGA MASIVA
+# =========================
+st.divider()
 st.subheader("📦 Carga masiva de empleados")
 
-archivo = st.file_uploader("Sube archivo Excel", type=["xlsx"])
+archivo = st.file_uploader("Sube Excel", type=["xlsx"])
 
 if archivo:
     df = pd.read_excel(archivo)
-
-    st.write("Vista previa:")
     st.dataframe(df)
 
-    if st.button("🚀 Subir a Supabase"):
+    if st.button("🚀 Subir empleados"):
+        ok, err = 0, 0
 
-        errores = []
-        insertados = 0
-
-        for i, row in df.iterrows():
+        for _, row in df.iterrows():
             try:
-                nombre = str(row['nombre']).strip()
-                pin = str(row['pin']).strip()
-                sucursal_nombre = str(row['sucursal']).strip()
-
-                # 🔍 Buscar sucursal
-                res = supabase.table("sucursales")\
-                    .select("*")\
-                    .eq("nombre", sucursal_nombre)\
+                suc = supabase.table("sucursales")\
+                    .select("id")\
+                    .eq("nombre", row['sucursal'])\
                     .execute()
 
-                if not res.data:
-                    errores.append(f"{nombre}: sucursal no encontrada")
+                if not suc.data:
+                    err += 1
                     continue
 
-                sucursal_id = res.data[0]['id']
-
-                # 💾 Insertar empleado
                 supabase.table("empleados").insert({
-                    "nombre": nombre,
-                    "pin": pin,
+                    "nombre": row['nombre'],
+                    "pin": str(row['pin']),
                     "activo": True,
-                    "sucursal_id": sucursal_id
+                    "sucursal_id": suc.data[0]['id']
                 }).execute()
 
-                insertados += 1
+                ok += 1
+            except:
+                err += 1
 
-            except Exception as e:
-                errores.append(f"{nombre}: {e}")
-
-        st.success(f"✅ {insertados} empleados insertados")
-
-        if errores:
-            st.error("Errores:")
-            for e in errores:
-                st.write(e)
+        st.success(f"✅ {ok} empleados cargados")
+        if err:
+            st.warning(f"⚠️ {err} errores")
