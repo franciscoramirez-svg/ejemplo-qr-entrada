@@ -219,3 +219,37 @@ with st.expander("🔐 Administración"):
         img.save(buf, format="PNG")
 
         st.image(buf.getvalue(), caption=f"QR de {nombre_qr}", width=250)
+
+    st.divider()
+    st.subheader("🚀 Generación masiva de QR")
+
+    st.info("Pega los nombres (uno por línea)")
+
+    lista_texto = st.text_area("Lista de empleados")
+
+    if st.button("Generar TODOS los QR"):
+
+        if lista_texto.strip() == "":
+            st.warning("Agrega nombres primero")
+        else:
+            empleados = [e.strip() for e in lista_texto.split("\n") if e.strip()]
+
+            st.success(f"{len(empleados)} empleados detectados")
+
+            for emp in empleados:
+                qr = qrcode.QRCode(version=1, box_size=10, border=4)
+                qr.add_data(emp)
+                qr.make(fit=True)
+
+                img = qr.make_image(fill_color="black", back_color="white")
+                buf = BytesIO()
+                img.save(buf, format="PNG")
+
+                st.image(buf.getvalue(), caption=f"{emp}", width=200)
+
+                st.download_button(
+                    label=f"Descargar QR de {emp}",
+                    data=buf.getvalue(),
+                    file_name=f"{emp}.png",
+                    mime="image/png"
+                )
