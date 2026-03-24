@@ -310,7 +310,7 @@ if st.session_state.ubicacion_ok:
     # --- PASO 3: FORMULARIO DE JUSTIFICACIÓN (Fuera de la cámara) ---
 
     if st.session_state.necesita_justificar:
-    st.divider()
+        st.divider()
     with st.form("form_j"):
         st.warning(f"⚠️ JUSTIFICACIÓN REQUERIDA: {st.session_state.ultimo_empleado}")
         motivo = st.text_area("Explica el motivo de la incidencia:")
