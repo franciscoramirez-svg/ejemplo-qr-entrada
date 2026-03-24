@@ -213,6 +213,9 @@ if st.session_state.ubicacion_ok:
     
             # 2a. Cámara y QR
     foto = st.camera_input("Escanea QR")
+    if st.button("🔄 Limpiar cámara"):
+    st.session_state.procesando = False
+    st.rerun()
     
     if foto and not st.session_state.procesando:
         img = cv2.imdecode(np.asarray(bytearray(foto.getvalue()), dtype=np.uint8), 1)
@@ -271,9 +274,19 @@ if st.session_state.ubicacion_ok:
                         "min_retardo": min_r,
                         "justificacion": ""
                     }).execute()
-            
+                
                     st.success("✅ Guardado en Supabase")
-                    st.write(response)
+
+                    # 🔥 Activar justificación si aplica
+                    if est in ["RETARDO CRÍTICO", "Retardo", "SALIDA NO AUTORIZADA", "SALIDA ANTICIPADA"]:
+                        st.session_state.necesita_justificar = True
+                        st.session_state.ultimo_empleado = data
+                        st.session_state.ultima_hora = ahora.strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    # 🔥 Reset para permitir siguiente escaneo
+                    st.session_state.procesando = False
+                    
+                    st.rerun()
 
                     if est in ["RETARDO CRÍTICO", "Retardo", "SALIDA NO AUTORIZADA", "SALIDA ANTICIPADA"]:
                         st.session_state.necesita_justificar = True
@@ -293,36 +306,41 @@ if st.session_state.ubicacion_ok:
             c1.button("📥 ENTRADA", on_click=registrar, args=("Entrada",), use_container_width=True)
             c2.button("📤 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True)
 
+    
     # --- PASO 3: FORMULARIO DE JUSTIFICACIÓN (Fuera de la cámara) ---
+
     if st.session_state.necesita_justificar:
-        st.divider()
-        with st.form("form_j"):
-            st.warning(f"⚠️ JUSTIFICACIÓN REQUERIDA: {st.session_state.ultimo_empleado}")
-            motivo = st.text_area("Explica el motivo de la incidencia:")
-    
-            if st.form_submit_button("✅ Guardar y Finalizar"):
-                if len(motivo) > 4:
-                    try:
-                        response = (
-                            supabase
-                            .table("registros")
-                            .update({
-                                "justificacion": motivo
-                            })
-                            .eq("empleado", st.session_state.ultimo_empleado)
-                            .eq("fecha_hora", st.session_state.ultima_hora)
-                            .execute()
-                        )
-    
-                        st.success("✅ Justificación guardada en Supabase")
-    
-                        st.session_state.necesita_justificar = False
-                        st.rerun()
-    
-                    except Exception as e:
-                        st.error(f"❌ Error al guardar justificación: {e}")
-                else:
-                    st.error("⚠️ Escribe un motivo más detallado.")
+    st.divider()
+    with st.form("form_j"):
+        st.warning(f"⚠️ JUSTIFICACIÓN REQUERIDA: {st.session_state.ultimo_empleado}")
+        motivo = st.text_area("Explica el motivo de la incidencia:")
+
+        if st.form_submit_button("✅ Guardar y Finalizar"):
+            if len(motivo) > 4:
+                try:
+                    response = (
+                        supabase
+                        .table("registros")
+                        .update({
+                            "justificacion": motivo
+                        })
+                        .eq("empleado", st.session_state.ultimo_empleado)
+                        .eq("fecha_hora", st.session_state.ultima_hora)
+                        .execute()
+                    )
+
+                    st.success("✅ Justificación guardada")
+
+                    # 🔥 RESET TOTAL
+                    st.session_state.necesita_justificar = False
+                    st.session_state.procesando = False
+
+                    st.rerun()
+
+                except Exception as e:
+                    st.error(f"❌ Error: {e}")
+            else:
+                st.error("⚠️ Escribe un motivo más detallado.")
     
 
 
