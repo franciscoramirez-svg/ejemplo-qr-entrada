@@ -297,8 +297,12 @@ if st.session_state.ubicacion_ok:
             
                 except Exception as e:
                     st.error(f"❌ ERROR REAL: {e}")
-            
+
+                st.session_state.necesita_justificar = False
+                st.session_state.ultimo_empleado = ""
+                st.session_state.ultima_hora = ""
                 st.session_state.procesando = False
+                
                 st.rerun()
  
             # Botones de acción
