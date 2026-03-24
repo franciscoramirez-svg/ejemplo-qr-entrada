@@ -5,6 +5,7 @@ from streamlit_js_eval import get_geolocation
 import pytz
 from math import radians, cos, sin, asin, sqrt
 from supabase import create_client
+import zipfile
 
 # --- SUPABASE ---
 url = st.secrets["SUPABASE_URL"]
@@ -274,3 +275,38 @@ if archivo:
         st.success(f"✅ {ok} empleados cargados")
         if err:
             st.warning(f"⚠️ {err} errores")
+
+import zipfile
+
+# =========================
+# 📦 GENERAR QR MASIVO (ZIP)
+# =========================
+st.divider()
+st.subheader("📦 Generar QR masivos")
+
+if st.button("🎯 Generar TODOS los QR en ZIP"):
+
+    empleados = supabase.table("empleados").select("*").execute().data
+
+    if not empleados:
+        st.warning("No hay empleados")
+    else:
+        zip_buffer = BytesIO()
+
+        with zipfile.ZipFile(zip_buffer, "w") as zf:
+
+            for emp in empleados:
+                nombre = emp['nombre']
+
+                qr = qrcode.make(nombre)
+
+                img_buffer = BytesIO()
+                qr.save(img_buffer, format="PNG")
+
+                zf.writestr(f"{nombre}.png", img_buffer.getvalue())
+
+        st.download_button(
+            "⬇️ Descargar ZIP",
+            zip_buffer.getvalue(),
+            file_name="QR_Empleados.zip"
+        )
