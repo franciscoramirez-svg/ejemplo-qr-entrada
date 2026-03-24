@@ -225,7 +225,7 @@ if st.session_state.ubicacion_ok:
                 
                 # Lógica de validación Entrada/Salida
                 if tipo == "Entrada" and not ult_reg.empty and ult_reg['Tipo'].values[0] == "Entrada":
-                    st.toast(f"⚠️ {data}, no marcaste SALIDA anterior.", icon="❌")
+                   st.warning(f"⚠️ {data}, no marcaste SALIDA anterior. Se registrará de todos modos.")
                 else:
                     est, min_r = "A Tiempo", 0
                     if tipo == "Entrada":
