@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta, date
 from streamlit_js_eval import get_geolocation
 import cv2
@@ -24,7 +23,6 @@ supabase = create_client(url, key)
 
 # --- 1. CONFIGURACIÓN INICIAL ---
 zona_veracruz = pytz.timezone('America/Mexico_City')
-conn = st.connection("gsheets", type=GSheetsConnection)
 
 HORA_ENTRADA_OFICIAL = "07:00:00" 
 HORA_SALIDA_OFICIAL = "17:00:00" 
@@ -233,10 +231,10 @@ if st.session_state.ubicacion_ok:
             
                 # ⚠️ Validación (solo aviso, no bloquea)
                 try:
-                    df_act = conn.read(ttl=0)
-                    ult_reg = df_act[df_act['Empleado'] == data].tail(1)
-            
-                    if tipo == "Entrada" and not ult_reg.empty and ult_reg['Tipo'].values[0] == "Entrada":
+                    df_act = obtener_registros()
+                    ult_reg = df_act[df_act['empleado'] == data].tail(1)
+
+                    if tipo == "Entrada" and not ult_reg.empty and ult_reg['tipo'].values[0] == "Entrada":
                         st.warning(f"⚠️ {data}, no marcaste SALIDA anterior. Se registrará de todos modos.")
                 except:
                     pass
@@ -276,11 +274,19 @@ if st.session_state.ubicacion_ok:
             
                     st.success("✅ Guardado en Supabase")
                     st.write(response)
+
+                    if est in ["RETARDO CRÍTICO", "Retardo", "SALIDA NO AUTORIZADA", "SALIDA ANTICIPADA"]:
+                        st.session_state.necesita_justificar = True
+                        st.session_state.ultimo_empleado = data
+                        st.session_state.ultima_hora = ahora.strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    st.rerun()
             
                 except Exception as e:
                     st.error(f"❌ ERROR REAL: {e}")
             
                 st.session_state.procesando = False
+                st.rerun()
 
             # Botones de acción
             c1, c2 = st.columns(2)
@@ -298,8 +304,10 @@ if st.session_state.ubicacion_ok:
                    try:
                     response = supabase.table("registros").update({
                         "justificacion": motivo
-                    }).eq("empleado", st.session_state.ultimo_empleado)\
-                      .execute()
+                    })
+                    .eq("empleado", st.session_state.ultimo_empleado)\
+                    .eq("fecha_hora", st.session_state.ultima_hora)   
+                    .execute()
                 
                     st.success("✅ Justificación guardada en Supabase")
                     st.session_state.necesita_justificar = False
@@ -321,6 +329,11 @@ with st.expander("🔐 Administración"):
         
         # Lectura de datos frescos de la sábana principal
         df_a = obtener_registros()
+        
+        if df_a.empty:
+             st.warning("No hay registros aún")
+             st.stop()
+            
         df_a['fecha_hora'] = pd.to_datetime(df_a['fecha_hora'])
         
         # Obtener lista de empleados desde la pestaña 'Empleados'
@@ -387,7 +400,7 @@ with st.expander("🔐 Administración"):
 
         with t3:
             
-           pts = df_h.dropna(subset=['Lat', 'Lon']).copy()
+           pts = df_h.dropna(subset=['lat', 'lon']).copy()
            if not pts.empty:
                pts = pts.rename(columns={'Lat': 'lat', 'Lon': 'lon'})
         # Mostramos un mapa con puntos más grandes y color
