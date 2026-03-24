@@ -216,3 +216,56 @@ with st.expander("🔐 Panel empresa"):
             pts = hoy.dropna(subset=['lat', 'lon'])
             if not pts.empty:
                 st.map(pts)
+
+st.subheader("📦 Carga masiva de empleados")
+
+archivo = st.file_uploader("Sube archivo Excel", type=["xlsx"])
+
+if archivo:
+    df = pd.read_excel(archivo)
+
+    st.write("Vista previa:")
+    st.dataframe(df)
+
+    if st.button("🚀 Subir a Supabase"):
+
+        errores = []
+        insertados = 0
+
+        for i, row in df.iterrows():
+            try:
+                nombre = str(row['nombre']).strip()
+                pin = str(row['pin']).strip()
+                sucursal_nombre = str(row['sucursal']).strip()
+
+                # 🔍 Buscar sucursal
+                res = supabase.table("sucursales")\
+                    .select("*")\
+                    .eq("nombre", sucursal_nombre)\
+                    .execute()
+
+                if not res.data:
+                    errores.append(f"{nombre}: sucursal no encontrada")
+                    continue
+
+                sucursal_id = res.data[0]['id']
+
+                # 💾 Insertar empleado
+                supabase.table("empleados").insert({
+                    "nombre": nombre,
+                    "pin": pin,
+                    "activo": True,
+                    "sucursal_id": sucursal_id
+                }).execute()
+
+                insertados += 1
+
+            except Exception as e:
+                errores.append(f"{nombre}: {e}")
+
+        st.success(f"✅ {insertados} empleados insertados")
+
+        if errores:
+            st.error("Errores:")
+            for e in errores:
+                st.write(e)
