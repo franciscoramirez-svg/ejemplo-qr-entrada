@@ -187,118 +187,118 @@ if st.session_state.necesita_justificar and st.session_state.ultimo_empleado:
 st.divider()
 with st.expander("🔐 Administración"):
 
-if st.text_input("Password", type="password") == "NEOMOTIC2024":
-
-    df = obtener_registros()
-
-    if df.empty:
-        st.warning("Sin registros aún")
-        st.stop()
-
-    df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
-    hoy = datetime.now(zona_veracruz).date()
-    df_hoy = df[df['fecha_hora'].dt.date == hoy]
-
-    # ========================
-    # 📊 KPIs
-    # ========================
-    total = len(df_hoy)
-    entradas = len(df_hoy[df_hoy['tipo'] == 'Entrada'])
-    retardos = len(df_hoy[df_hoy['estatus'].isin(["Retardo", "RETARDO CRÍTICO"])])
-    incidencias = len(df_hoy[df_hoy['estatus'].isin(["RETARDO CRÍTICO", "SALIDA ANTICIPADA"])])
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("👥 Registros", total)
-    c2.metric("📥 Entradas", entradas)
-    c3.metric("⏱️ Retardos", retardos)
-    c4.metric("⚠️ Incidencias", incidencias)
-
-    st.divider()
-
-    # ========================
-    # 📈 GRÁFICAS
-    # ========================
-    st.subheader("📈 Entradas vs Salidas")
-    graf = df_hoy['tipo'].value_counts()
-    st.bar_chart(graf)
-
-    st.subheader("📊 Estatus")
-    graf2 = df_hoy['estatus'].value_counts()
-    st.bar_chart(graf2)
-
-    st.divider()
-
-    # ========================
-    # 🧾 LISTA DE EMPLEADOS
-    # ========================
-    st.subheader("👥 Lista de empleados")
-
-    lista_texto = st.text_area("Pega lista (uno por línea)")
-
-    lista_empleados = [e.strip() for e in lista_texto.split("\n") if e.strip()]
-
-    # ========================
-    # ❌ FALTANTES
-    # ========================
-    if lista_empleados:
-        llegaron = df_hoy[df_hoy['tipo'] == 'Entrada']['empleado'].unique()
-        faltan = [e for e in lista_empleados if e not in llegaron]
-
-        st.subheader("🚫 No han llegado hoy")
-
-        if faltan:
-            for f in faltan:
-                st.error(f"❌ {f}")
+    if st.text_input("Password", type="password") == "NEOMOTIC2024":
+    
+        df = obtener_registros()
+    
+        if df.empty:
+            st.warning("Sin registros aún")
+            st.stop()
+    
+        df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
+        hoy = datetime.now(zona_veracruz).date()
+        df_hoy = df[df['fecha_hora'].dt.date == hoy]
+    
+        # ========================
+        # 📊 KPIs
+        # ========================
+        total = len(df_hoy)
+        entradas = len(df_hoy[df_hoy['tipo'] == 'Entrada'])
+        retardos = len(df_hoy[df_hoy['estatus'].isin(["Retardo", "RETARDO CRÍTICO"])])
+        incidencias = len(df_hoy[df_hoy['estatus'].isin(["RETARDO CRÍTICO", "SALIDA ANTICIPADA"])])
+    
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("👥 Registros", total)
+        c2.metric("📥 Entradas", entradas)
+        c3.metric("⏱️ Retardos", retardos)
+        c4.metric("⚠️ Incidencias", incidencias)
+    
+        st.divider()
+    
+        # ========================
+        # 📈 GRÁFICAS
+        # ========================
+        st.subheader("📈 Entradas vs Salidas")
+        graf = df_hoy['tipo'].value_counts()
+        st.bar_chart(graf)
+    
+        st.subheader("📊 Estatus")
+        graf2 = df_hoy['estatus'].value_counts()
+        st.bar_chart(graf2)
+    
+        st.divider()
+    
+        # ========================
+        # 🧾 LISTA DE EMPLEADOS
+        # ========================
+        st.subheader("👥 Lista de empleados")
+    
+        lista_texto = st.text_area("Pega lista (uno por línea)")
+    
+        lista_empleados = [e.strip() for e in lista_texto.split("\n") if e.strip()]
+    
+        # ========================
+        # ❌ FALTANTES
+        # ========================
+        if lista_empleados:
+            llegaron = df_hoy[df_hoy['tipo'] == 'Entrada']['empleado'].unique()
+            faltan = [e for e in lista_empleados if e not in llegaron]
+    
+            st.subheader("🚫 No han llegado hoy")
+    
+            if faltan:
+                for f in faltan:
+                    st.error(f"❌ {f}")
+            else:
+                st.success("✅ Todos han llegado")
+    
+        st.divider()
+    
+        # ========================
+        # 🥇 RANKING PUNTUALIDAD
+        # ========================
+        st.subheader("🥇 Ranking puntualidad")
+    
+        ranking = df[df['tipo'] == 'Entrada'].groupby('empleado')['min_retardo'].mean().reset_index()
+        ranking = ranking.sort_values(by='min_retardo')
+    
+        st.dataframe(ranking, use_container_width=True)
+    
+        st.divider()
+    
+        # ========================
+        # 🚨 TOP RETARDOS
+        # ========================
+        st.subheader("🚨 Top retardos")
+    
+        top_retardos = df[df['tipo'] == 'Entrada'].sort_values(by='min_retardo', ascending=False).head(10)
+    
+        st.dataframe(top_retardos[['empleado', 'fecha_hora', 'min_retardo']], use_container_width=True)
+    
+        st.divider()
+    
+        # ========================
+        # 📋 TABLA GENERAL
+        # ========================
+        st.subheader("📋 Registros de hoy")
+    
+        df_view = df_hoy.copy()
+        df_view['fecha_hora'] = df_view['fecha_hora'].dt.strftime("%d/%m/%Y %H:%M:%S")
+    
+        st.dataframe(
+            df_view[['empleado', 'fecha_hora', 'tipo', 'estatus', 'justificacion']],
+            use_container_width=True
+        )
+    
+        st.divider()
+    
+        # ========================
+        # 🗺️ MAPA
+        # ========================
+        st.subheader("🗺️ Ubicaciones")
+    
+        pts = df_hoy.dropna(subset=['lat', 'lon'])
+        if not pts.empty:
+            st.map(pts)
         else:
-            st.success("✅ Todos han llegado")
-
-    st.divider()
-
-    # ========================
-    # 🥇 RANKING PUNTUALIDAD
-    # ========================
-    st.subheader("🥇 Ranking puntualidad")
-
-    ranking = df[df['tipo'] == 'Entrada'].groupby('empleado')['min_retardo'].mean().reset_index()
-    ranking = ranking.sort_values(by='min_retardo')
-
-    st.dataframe(ranking, use_container_width=True)
-
-    st.divider()
-
-    # ========================
-    # 🚨 TOP RETARDOS
-    # ========================
-    st.subheader("🚨 Top retardos")
-
-    top_retardos = df[df['tipo'] == 'Entrada'].sort_values(by='min_retardo', ascending=False).head(10)
-
-    st.dataframe(top_retardos[['empleado', 'fecha_hora', 'min_retardo']], use_container_width=True)
-
-    st.divider()
-
-    # ========================
-    # 📋 TABLA GENERAL
-    # ========================
-    st.subheader("📋 Registros de hoy")
-
-    df_view = df_hoy.copy()
-    df_view['fecha_hora'] = df_view['fecha_hora'].dt.strftime("%d/%m/%Y %H:%M:%S")
-
-    st.dataframe(
-        df_view[['empleado', 'fecha_hora', 'tipo', 'estatus', 'justificacion']],
-        use_container_width=True
-    )
-
-    st.divider()
-
-    # ========================
-    # 🗺️ MAPA
-    # ========================
-    st.subheader("🗺️ Ubicaciones")
-
-    pts = df_hoy.dropna(subset=['lat', 'lon'])
-    if not pts.empty:
-        st.map(pts)
-    else:
-        st.info("Sin ubicaciones hoy")    
+            st.info("Sin ubicaciones hoy")    
