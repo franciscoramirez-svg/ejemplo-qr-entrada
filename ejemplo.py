@@ -339,7 +339,7 @@ with st.expander("🔐 Administración"):
 
         with t1: 
             # Tabla de registros del día incluyendo la nueva columna Justificacion
-            st.dataframe(df_h[['empleado', 'hora', 'tipo', 'estatus', 'justificacion']], use_container_width=True)
+            st.dataframe(df_h[['empleado', 'fecha_hora', 'tipo', 'estatus', 'justificacion']], use_container_width=True)
             
                        # --- BOTÓN DE DESCARGA EXCEL ---
             import io
