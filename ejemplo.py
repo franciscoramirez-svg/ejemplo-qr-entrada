@@ -214,8 +214,8 @@ if st.session_state.ubicacion_ok:
             # 2a. Cámara y QR
     foto = st.camera_input("Escanea QR")
     if st.button("🔄 Limpiar cámara"):
-    st.session_state.procesando = False
-    st.rerun()
+        st.session_state.procesando = False
+        st.rerun()
     
     if foto and not st.session_state.procesando:
         img = cv2.imdecode(np.asarray(bytearray(foto.getvalue()), dtype=np.uint8), 1)
