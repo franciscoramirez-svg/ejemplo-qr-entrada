@@ -196,8 +196,55 @@ with st.expander("🔐 Administración"):
         else:
             df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
             hoy_df = df[df['fecha_hora'].dt.date == ahora.date()]
-
-            st.dataframe(hoy_df[['empleado', 'fecha_hora', 'tipo', 'estatus', 'justificacion']])
+            
+                        # --- DASHBOARD PRO ---
+            st.subheader("📊 Dashboard de Asistencia (Hoy)")
+            
+            # KPIs
+            total_registros = len(hoy_df)
+            total_entradas = len(hoy_df[hoy_df['tipo'] == 'Entrada'])
+            total_salidas = len(hoy_df[hoy_df['tipo'] == 'Salida'])
+            retardos = len(hoy_df[hoy_df['estatus'].isin(["Retardo", "RETARDO CRÍTICO"])])
+            incidencias = len(hoy_df[hoy_df['estatus'].isin(["RETARDO CRÍTICO", "SALIDA ANTICIPADA"])])
+            
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("👥 Registros", total_registros)
+            c2.metric("📥 Entradas", total_entradas)
+            c3.metric("⏱️ Retardos", retardos)
+            c4.metric("⚠️ Incidencias", incidencias)
+            
+            st.divider()
+            
+            # Gráfica Entradas vs Salidas
+            st.subheader("📈 Entradas vs Salidas")
+            
+            graf = hoy_df['tipo'].value_counts().reset_index()
+            graf.columns = ['tipo', 'cantidad']
+            
+            st.bar_chart(graf.set_index('tipo'))
+            
+            st.divider()
+            
+            # Gráfica Estatus
+            st.subheader("📊 Estatus del Día")
+            
+            graf2 = hoy_df['estatus'].value_counts().reset_index()
+            graf2.columns = ['estatus', 'cantidad']
+            
+            st.bar_chart(graf2.set_index('estatus'))
+            
+            st.divider()
+            
+            # Tabla limpia
+            st.subheader("📋 Detalle de registros")
+            
+            df_view = hoy_df.copy()
+            df_view['fecha_hora'] = df_view['fecha_hora'].dt.strftime("%d/%m/%Y %H:%M:%S")
+            
+            st.dataframe(
+                df_view[['empleado', 'fecha_hora', 'tipo', 'estatus', 'justificacion']],
+                use_container_width=True
+            )
 
             st.subheader("Mapa")
             pts = hoy_df.dropna(subset=['lat', 'lon'])
