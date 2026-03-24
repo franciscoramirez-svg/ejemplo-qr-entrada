@@ -204,52 +204,44 @@ with st.expander("🔐 Administración"):
             if not pts.empty:
                 st.map(pts)
 
-    st.divider()
-    st.subheader("🖨️ Generador de QR")
-
-    nombre_qr = st.text_input("Nombre del empleado")
-
-    if nombre_qr and st.button("Generar QR"):
-        qr = qrcode.QRCode(version=1, box_size=10, border=4)
-        qr.add_data(nombre_qr)
-        qr.make(fit=True)
-
-        img = qr.make_image(fill_color="black", back_color="white")
-        buf = BytesIO()
-        img.save(buf, format="PNG")
-
-        st.image(buf.getvalue(), caption=f"QR de {nombre_qr}", width=250)
+    import zipfile
 
     st.divider()
-    st.subheader("🚀 Generación masiva de QR")
+    st.subheader("📦 Generar QR en ZIP")
 
     st.info("Pega los nombres (uno por línea)")
 
-    lista_texto = st.text_area("Lista de empleados")
+    lista_texto = st.text_area("Lista para ZIP")
 
-    if st.button("Generar TODOS los QR"):
+    if st.button("Generar ZIP de QR"):
 
         if lista_texto.strip() == "":
             st.warning("Agrega nombres primero")
         else:
             empleados = [e.strip() for e in lista_texto.split("\n") if e.strip()]
 
-            st.success(f"{len(empleados)} empleados detectados")
+            zip_buffer = BytesIO()
 
-            for emp in empleados:
-                qr = qrcode.QRCode(version=1, box_size=10, border=4)
-                qr.add_data(emp)
-                qr.make(fit=True)
+            with zipfile.ZipFile(zip_buffer, "w") as zip_file:
 
-                img = qr.make_image(fill_color="black", back_color="white")
-                buf = BytesIO()
-                img.save(buf, format="PNG")
+               for emp in empleados:
+                   qr = qrcode.QRCode(version=1, box_size=10, border=4)
+                   qr.add_data(emp)
+                   qr.make(fit=True)
 
-                st.image(buf.getvalue(), caption=f"{emp}", width=200)
+                   img = qr.make_image(fill_color="black", back_color="white")
+    
+                   img_bytes = BytesIO()
+                   img.save(img_bytes, format="PNG")
+    
+                   nombre_archivo = f"{emp}.png".replace(" ", "_")
+                   zip_file.writestr(nombre_archivo, img_bytes.getvalue())
 
-                st.download_button(
-                    label=f"Descargar QR de {emp}",
-                    data=buf.getvalue(),
-                    file_name=f"{emp}.png",
-                    mime="image/png"
-                )
+        st.success(f"✅ ZIP generado con {len(empleados)} QR")
+
+        st.download_button(
+            label="📥 Descargar ZIP",
+            data=zip_buffer.getvalue(),
+            file_name="QR_Empleados.zip",
+            mime="application/zip"
+        )
