@@ -376,14 +376,14 @@ with st.expander("🔐 Administración"):
         with t2:
             # Lógica de quién no ha checado entrada hoy
             if lista_m:
-                llegaron = df_h[df_h['Tipo'] == 'Entrada']['Empleado'].unique()
+                llegaron = df_h[df_h['tipo'] == 'Entrada']['empleado'].unique()
                 faltan = [e for e in lista_m if e not in llegaron]
                 if faltan:
                     for f in faltan: st.write(f"❌ {f}")
                 else:
                     st.success("¡Personal completo hoy!")
             else:
-                st.info("Carga la lista de nombres en la pestaña 'Empleados' para ver faltantes.")
+                st.info("Carga la lista de nombres en la pestaña 'empleados' para ver faltantes.")
 
         with t3:
             
