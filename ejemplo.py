@@ -276,7 +276,6 @@ if archivo:
         if err:
             st.warning(f"⚠️ {err} errores")
 
-import zipfile
 
 # =========================
 # 📦 GENERAR QR MASIVO (ZIP)
