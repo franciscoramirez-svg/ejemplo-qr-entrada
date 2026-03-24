@@ -187,108 +187,118 @@ if st.session_state.necesita_justificar and st.session_state.ultimo_empleado:
 st.divider()
 with st.expander("🔐 Administración"):
 
-    if st.text_input("Password", type="password") == "NEOMOTIC2024":
+if st.text_input("Password", type="password") == "NEOMOTIC2024":
 
-        df = obtener_registros()
+    df = obtener_registros()
 
-        if df.empty:
-            st.warning("Sin registros")
-        else:
-            df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
-            hoy_df = df[df['fecha_hora'].dt.date == ahora.date()]
-            
-                        # --- DASHBOARD PRO ---
-            st.subheader("📊 Dashboard de Asistencia (Hoy)")
-            
-            # KPIs
-            total_registros = len(hoy_df)
-            total_entradas = len(hoy_df[hoy_df['tipo'] == 'Entrada'])
-            total_salidas = len(hoy_df[hoy_df['tipo'] == 'Salida'])
-            retardos = len(hoy_df[hoy_df['estatus'].isin(["Retardo", "RETARDO CRÍTICO"])])
-            incidencias = len(hoy_df[hoy_df['estatus'].isin(["RETARDO CRÍTICO", "SALIDA ANTICIPADA"])])
-            
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("👥 Registros", total_registros)
-            c2.metric("📥 Entradas", total_entradas)
-            c3.metric("⏱️ Retardos", retardos)
-            c4.metric("⚠️ Incidencias", incidencias)
-            
-            st.divider()
-            
-            # Gráfica Entradas vs Salidas
-            st.subheader("📈 Entradas vs Salidas")
-            
-            graf = hoy_df['tipo'].value_counts().reset_index()
-            graf.columns = ['tipo', 'cantidad']
-            
-            st.bar_chart(graf.set_index('tipo'))
-            
-            st.divider()
-            
-            # Gráfica Estatus
-            st.subheader("📊 Estatus del Día")
-            
-            graf2 = hoy_df['estatus'].value_counts().reset_index()
-            graf2.columns = ['estatus', 'cantidad']
-            
-            st.bar_chart(graf2.set_index('estatus'))
-            
-            st.divider()
-            
-            # Tabla limpia
-            st.subheader("📋 Detalle de registros")
-            
-            df_view = hoy_df.copy()
-            df_view['fecha_hora'] = df_view['fecha_hora'].dt.strftime("%d/%m/%Y %H:%M:%S")
-            
-            st.dataframe(
-                df_view[['empleado', 'fecha_hora', 'tipo', 'estatus', 'justificacion']],
-                use_container_width=True
-            )
+    if df.empty:
+        st.warning("Sin registros aún")
+        st.stop()
 
-            st.subheader("Mapa")
-            pts = hoy_df.dropna(subset=['lat', 'lon'])
-            if not pts.empty:
-                st.map(pts)
+    df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
+    hoy = datetime.now(zona_veracruz).date()
+    df_hoy = df[df['fecha_hora'].dt.date == hoy]
 
-    import zipfile
+    # ========================
+    # 📊 KPIs
+    # ========================
+    total = len(df_hoy)
+    entradas = len(df_hoy[df_hoy['tipo'] == 'Entrada'])
+    retardos = len(df_hoy[df_hoy['estatus'].isin(["Retardo", "RETARDO CRÍTICO"])])
+    incidencias = len(df_hoy[df_hoy['estatus'].isin(["RETARDO CRÍTICO", "SALIDA ANTICIPADA"])])
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("👥 Registros", total)
+    c2.metric("📥 Entradas", entradas)
+    c3.metric("⏱️ Retardos", retardos)
+    c4.metric("⚠️ Incidencias", incidencias)
 
     st.divider()
-    st.subheader("📦 Generar QR en ZIP")
 
-    st.info("Pega los nombres (uno por línea)")
+    # ========================
+    # 📈 GRÁFICAS
+    # ========================
+    st.subheader("📈 Entradas vs Salidas")
+    graf = df_hoy['tipo'].value_counts()
+    st.bar_chart(graf)
 
-    lista_texto = st.text_area("Lista para ZIP")
+    st.subheader("📊 Estatus")
+    graf2 = df_hoy['estatus'].value_counts()
+    st.bar_chart(graf2)
 
-    if st.button("Generar ZIP de QR"):
+    st.divider()
 
-        if lista_texto.strip() == "":
-            st.warning("Agrega nombres primero")
+    # ========================
+    # 🧾 LISTA DE EMPLEADOS
+    # ========================
+    st.subheader("👥 Lista de empleados")
+
+    lista_texto = st.text_area("Pega lista (uno por línea)")
+
+    lista_empleados = [e.strip() for e in lista_texto.split("\n") if e.strip()]
+
+    # ========================
+    # ❌ FALTANTES
+    # ========================
+    if lista_empleados:
+        llegaron = df_hoy[df_hoy['tipo'] == 'Entrada']['empleado'].unique()
+        faltan = [e for e in lista_empleados if e not in llegaron]
+
+        st.subheader("🚫 No han llegado hoy")
+
+        if faltan:
+            for f in faltan:
+                st.error(f"❌ {f}")
         else:
-            empleados = [e.strip() for e in lista_texto.split("\n") if e.strip()]
+            st.success("✅ Todos han llegado")
 
-            zip_buffer = BytesIO()
+    st.divider()
 
-            with zipfile.ZipFile(zip_buffer, "w") as zip_file:
+    # ========================
+    # 🥇 RANKING PUNTUALIDAD
+    # ========================
+    st.subheader("🥇 Ranking puntualidad")
 
-               for emp in empleados:
-                   qr = qrcode.QRCode(version=1, box_size=10, border=4)
-                   qr.add_data(emp)
-                   qr.make(fit=True)
+    ranking = df[df['tipo'] == 'Entrada'].groupby('empleado')['min_retardo'].mean().reset_index()
+    ranking = ranking.sort_values(by='min_retardo')
 
-                   img = qr.make_image(fill_color="black", back_color="white")
-    
-                   img_bytes = BytesIO()
-                   img.save(img_bytes, format="PNG")
-    
-                   nombre_archivo = f"{emp}.png".replace(" ", "_")
-                   zip_file.writestr(nombre_archivo, img_bytes.getvalue())
+    st.dataframe(ranking, use_container_width=True)
 
-        st.success(f"✅ ZIP generado con {len(empleados)} QR")
+    st.divider()
 
-        st.download_button(
-            label="📥 Descargar ZIP",
-            data=zip_buffer.getvalue(),
-            file_name="QR_Empleados.zip",
-            mime="application/zip"
-        )
+    # ========================
+    # 🚨 TOP RETARDOS
+    # ========================
+    st.subheader("🚨 Top retardos")
+
+    top_retardos = df[df['tipo'] == 'Entrada'].sort_values(by='min_retardo', ascending=False).head(10)
+
+    st.dataframe(top_retardos[['empleado', 'fecha_hora', 'min_retardo']], use_container_width=True)
+
+    st.divider()
+
+    # ========================
+    # 📋 TABLA GENERAL
+    # ========================
+    st.subheader("📋 Registros de hoy")
+
+    df_view = df_hoy.copy()
+    df_view['fecha_hora'] = df_view['fecha_hora'].dt.strftime("%d/%m/%Y %H:%M:%S")
+
+    st.dataframe(
+        df_view[['empleado', 'fecha_hora', 'tipo', 'estatus', 'justificacion']],
+        use_container_width=True
+    )
+
+    st.divider()
+
+    # ========================
+    # 🗺️ MAPA
+    # ========================
+    st.subheader("🗺️ Ubicaciones")
+
+    pts = df_hoy.dropna(subset=['lat', 'lon'])
+    if not pts.empty:
+        st.map(pts)
+    else:
+        st.info("Sin ubicaciones hoy")    
