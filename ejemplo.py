@@ -203,3 +203,19 @@ with st.expander("🔐 Administración"):
             pts = hoy_df.dropna(subset=['lat', 'lon'])
             if not pts.empty:
                 st.map(pts)
+
+    st.divider()
+    st.subheader("🖨️ Generador de QR")
+
+    nombre_qr = st.text_input("Nombre del empleado")
+
+    if nombre_qr and st.button("Generar QR"):
+        qr = qrcode.QRCode(version=1, box_size=10, border=4)
+        qr.add_data(nombre_qr)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white")
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+
+        st.image(buf.getvalue(), caption=f"QR de {nombre_qr}", width=250)
