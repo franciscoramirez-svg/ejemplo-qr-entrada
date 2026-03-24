@@ -34,7 +34,15 @@ OFICINA_LAT = 19.245304
 OFICINA_LON = -96.174232 
 RADIO_PERMITIDO = 1000   
 
-# --- 2. FUNCIÓN DE CORREO CON DISEÑO Y JUSTIFICACIÓN ---
+def obtener_registros():
+    try:
+        response = supabase.table("registros").select("*").execute()
+        data = response.data
+        return pd.DataFrame(data)
+    except Exception as e:
+        st.error(f"Error al leer Supabase: {e}")
+        return pd.DataFrame()
+
 # --- 2. FUNCIÓN DE CORREO (ACTUALIZADA: DETECTA DÍAS NO LABORADOS) ---
 def enviar_reporte_semanal(df_registros):
     try:
@@ -312,7 +320,8 @@ with st.expander("🔐 Administración"):
     if st.text_input("Password", type="password", key="p_adm") == "NEOMOTIC2024":
         
         # Lectura de datos frescos de la sábana principal
-        df_a = conn.read(ttl=0)
+        df_a = obtener_registros()
+        df_a['fecha_hora'] = pd.to_datetime(df_a['fecha_hora'])
         
         # Obtener lista de empleados desde la pestaña 'Empleados'
         try: 
@@ -326,11 +335,11 @@ with st.expander("🔐 Administración"):
         
         # Procesamiento de fechas para filtrar "Hoy"
         df_a['Hora_dt'] = pd.to_datetime(df_a['Hora'], dayfirst=True, errors='coerce')
-        df_h = df_a[df_a['Hora_dt'].dt.date == ahora.date()].copy()
+        df_h = df_a[df_a['fecha_hora'].dt.date == ahora.date()]
 
         with t1: 
             # Tabla de registros del día incluyendo la nueva columna Justificacion
-            st.dataframe(df_h[['Empleado', 'Hora', 'Tipo', 'Estatus', 'Justificacion']], use_container_width=True)
+            st.dataframe(df_h[['empleado', 'hora', 'tipo', 'estatus', 'justificacion']], use_container_width=True)
             
                        # --- BOTÓN DE DESCARGA EXCEL ---
             import io
