@@ -249,9 +249,6 @@ if st.session_state.ubicacion_ok:
                                 est = "Salida Autorizada" if auth else "SALIDA NO AUTORIZADA"
                             except: est = "Salida a Tiempo"
 
-                    # Guardar registro
-                    nuevo = pd.DataFrame([[data, ahora.strftime("%d/%m/%Y %H:%M:%S"), st.session_state.lat_act, st.session_state.lon_act, tipo, est, min_r, ""]], 
-                                         columns=["Empleado", "Hora", "Lat", "Lon", "Tipo", "Estatus", "Min_Retardo", "Justificacion"])
                     
                     try:
                         ahora = datetime.now(zona_veracruz)
