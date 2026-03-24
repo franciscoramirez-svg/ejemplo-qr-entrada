@@ -302,12 +302,16 @@ if st.session_state.ubicacion_ok:
             if st.form_submit_button("✅ Guardar y Finalizar"):
                 if len(motivo) > 4:
                    try:
-                    response = supabase.table("registros").update({
-                        "justificacion": motivo
-                    })
-                    .eq("empleado", st.session_state.ultimo_empleado)\
-                    .eq("fecha_hora", st.session_state.ultima_hora)   
-                    .execute()
+                        response = (
+                              supabase
+                              .table("registros")
+                              .update({
+                                     "justificacion": motivo
+                              })
+                              .eq("empleado", st.session_state.ultimo_empleado)
+                              .eq("fecha_hora", st.session_state.ultima_hora)
+                              .execute()
+                        )
                 
                     st.success("✅ Justificación guardada en Supabase")
                     st.session_state.necesita_justificar = False
