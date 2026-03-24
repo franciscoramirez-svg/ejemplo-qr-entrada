@@ -334,7 +334,7 @@ with st.expander("🔐 Administración"):
         t1, t2, t3, t4 = st.tabs(["📋 Hoy", "🚫 Faltantes", "🗺️ Mapa", "🖨️ Generar QR"])
         
         # Procesamiento de fechas para filtrar "Hoy"
-        df_a['Hora_dt'] = pd.to_datetime(df_a['Hora'], dayfirst=True, errors='coerce')
+        df_a['fecha_hora'] = pd.to_datetime(df_a['fecha_hora'])
         df_h = df_a[df_a['fecha_hora'].dt.date == ahora.date()]
 
         with t1: 
