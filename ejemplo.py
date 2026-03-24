@@ -309,7 +309,18 @@ if st.session_state.ubicacion_ok:
     
     # --- PASO 3: FORMULARIO DE JUSTIFICACIÓN (Fuera de la cámara) ---
 
-    if st.session_state.necesita_justificar:
+    if 'procesando' not in st.session_state: st.session_state.procesando = False
+    if 'necesita_justificar' not in st.session_state: st.session_state.necesita_justificar = False
+    if 'ubicacion_ok' not in st.session_state: st.session_state.ubicacion_ok = False
+        
+
+    if 'ultimo_empleado' not in st.session_state:
+        st.session_state.ultimo_empleado = ""
+
+    if 'ultima_hora' not in st.session_state:
+        st.session_state.ultima_hora = ""
+        
+    if st.session_state.necesita_justificar and st.session_state.ultimo_empleado:
         st.divider()
     with st.form("form_j"):
         st.warning(f"⚠️ JUSTIFICACIÓN REQUERIDA: {st.session_state.ultimo_empleado}")
