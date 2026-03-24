@@ -5,6 +5,8 @@ from streamlit_js_eval import get_geolocation
 import pytz
 from math import radians, cos, sin, asin, sqrt
 from supabase import create_client
+import qrcode
+from io import BytesIO
 import zipfile
 
 # --- SUPABASE ---
@@ -112,7 +114,7 @@ def registrar(tipo):
 
     lat, lon = ubic
 
-    # ⚠️ evitar duplicado inmediato
+    # evitar duplicado
     df = obtener_registros()
     if not df.empty:
         ult = df[df['empleado'] == user['nombre']].tail(1)
@@ -216,12 +218,13 @@ with st.expander("🔐 Panel empresa"):
             st.warning("Sin datos")
         else:
             df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
-
             hoy = df[df['fecha_hora'].dt.date == datetime.now().date()]
 
-            st.subheader("📊 Indicadores")
-            st.metric("Registros hoy", len(hoy))
-            st.metric("Retardos", len(hoy[hoy['estatus'].str.contains("Retardo", na=False)]))
+            st.subheader("📊 KPIs")
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Registros hoy", len(hoy))
+            col2.metric("Retardos", len(hoy[hoy['estatus'].str.contains("Retardo", na=False)]))
+            col3.metric("Empleados", df['empleado'].nunique())
 
             st.subheader("📋 Hoy")
             st.dataframe(hoy, use_container_width=True)
@@ -234,6 +237,33 @@ with st.expander("🔐 Panel empresa"):
             pts = hoy.dropna(subset=['lat', 'lon'])
             if not pts.empty:
                 st.map(pts)
+
+# =========================
+# 📦 QR MASIVO ZIP
+# =========================
+st.divider()
+st.subheader("📦 Generar QR masivos")
+
+if st.button("🎯 Generar TODOS los QR en ZIP"):
+
+    empleados = supabase.table("empleados").select("*").execute().data
+
+    if not empleados:
+        st.warning("No hay empleados")
+    else:
+        zip_buffer = BytesIO()
+
+        with zipfile.ZipFile(zip_buffer, "w") as zf:
+            for emp in empleados:
+                nombre = emp['nombre']
+                qr = qrcode.make(nombre)
+
+                img_buffer = BytesIO()
+                qr.save(img_buffer, format="PNG")
+
+                zf.writestr(f"{nombre}.png", img_buffer.getvalue())
+
+        st.download_button("⬇️ Descargar ZIP", zip_buffer.getvalue(), file_name="QR_Empleados.zip")
 
 # =========================
 # 📦 CARGA MASIVA
@@ -275,37 +305,3 @@ if archivo:
         st.success(f"✅ {ok} empleados cargados")
         if err:
             st.warning(f"⚠️ {err} errores")
-
-
-# =========================
-# 📦 GENERAR QR MASIVO (ZIP)
-# =========================
-st.divider()
-st.subheader("📦 Generar QR masivos")
-
-if st.button("🎯 Generar TODOS los QR en ZIP"):
-
-    empleados = supabase.table("empleados").select("*").execute().data
-
-    if not empleados:
-        st.warning("No hay empleados")
-    else:
-        zip_buffer = BytesIO()
-
-        with zipfile.ZipFile(zip_buffer, "w") as zf:
-
-            for emp in empleados:
-                nombre = emp['nombre']
-
-                qr = qrcode.make(nombre)
-
-                img_buffer = BytesIO()
-                qr.save(img_buffer, format="PNG")
-
-                zf.writestr(f"{nombre}.png", img_buffer.getvalue())
-
-        st.download_button(
-            "⬇️ Descargar ZIP",
-            zip_buffer.getvalue(),
-            file_name="QR_Empleados.zip"
-        )
