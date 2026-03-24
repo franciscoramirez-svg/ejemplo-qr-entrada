@@ -215,70 +215,63 @@ if st.session_state.ubicacion_ok:
         if data:
             st.subheader(f"👤 Empleado detectado: {data}")
             
-                    # Definir función de registro dentro del flujo del empleado
+            # Definir función de registro dentro del flujo del empleado
             def registrar(tipo):
-                ahora = datetime.now(zona_veracruz) 
-                
+                ahora = datetime.now(zona_veracruz)
                 st.session_state.procesando = True
-                df_act = conn.read(ttl=0)
-                ult_reg = df_act[df_act['Empleado'] == data].tail(1)
-                
-                # Lógica de validación Entrada/Salida
-                if tipo == "Entrada" and not ult_reg.empty and ult_reg['Tipo'].values[0] == "Entrada":
-                   st.warning(f"⚠️ {data}, no marcaste SALIDA anterior. Se registrará de todos modos.")
-                
+            
+                # Leer último registro desde Supabase (opcional después)
+                # Por ahora solo advertimos sin bloquear
+            
+                # ⚠️ Validación (solo aviso, no bloquea)
+                try:
+                    df_act = conn.read(ttl=0)
+                    ult_reg = df_act[df_act['Empleado'] == data].tail(1)
+            
+                    if tipo == "Entrada" and not ult_reg.empty and ult_reg['Tipo'].values[0] == "Entrada":
+                        st.warning(f"⚠️ {data}, no marcaste SALIDA anterior. Se registrará de todos modos.")
+                except:
+                    pass
+            
+                # 🔢 Cálculo de estatus
                 est, min_r = "A Tiempo", 0
-                
+            
                 if tipo == "Entrada":
-                     h_lim = datetime.strptime(HORA_ENTRADA_OFICIAL, "%H:%M:%S").time()
-                     diff = (datetime.combine(date.today(), ahora.time()) - datetime.combine(date.today(), h_lim)).total_seconds() / 60
-                     min_r = max(0, int(diff))
-                   
-                     if min_r > 30: 
-                           est = "RETARDO CRÍTICO"
-                     elif min_r > UMBRAL_RETARDO_MINUTOS: 
-                           est = "Retardo"
-                    
+                    h_lim = datetime.strptime(HORA_ENTRADA_OFICIAL, "%H:%M:%S").time()
+                    diff = (datetime.combine(date.today(), ahora.time()) - datetime.combine(date.today(), h_lim)).total_seconds() / 60
+                    min_r = max(0, int(diff))
+            
+                    if min_r > 30:
+                        est = "RETARDO CRÍTICO"
+                    elif min_r > UMBRAL_RETARDO_MINUTOS:
+                        est = "Retardo"
+            
                 elif tipo == "Salida":
-                        h_sal = datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()
-                        if ahora.time() < h_sal: est = "SALIDA ANTICIPADA"
-                        else:
-                            try:
-                                df_m = conn.read(worksheet="Empleados", ttl=0)
-                                auth = (df_m.loc[df_m['Nombre'] == data, 'Autoriza_Extra'].values[0] == "SÍ")
-                                est = "Salida Autorizada" if auth else "SALIDA NO AUTORIZADA"
-                            except: est = "Salida a Tiempo"
-
-                    
-                    try:
-                        ahora = datetime.now(zona_veracruz)
-                    
-                        response = supabase.table("registros").insert({
-                            "empleado": data,
-                            "fecha_hora": ahora.strftime("%Y-%m-%d %H:%M:%S"),
-                            "lat": st.session_state.lat_act,
-                            "lon": st.session_state.lon_act,
-                            "tipo": tipo,
-                            "estatus": est,
-                            "min_retardo": min_r,
-                            "justificacion": ""
-                        }).execute()
-                    
-                        st.success("✅ INTENTO DE GUARDADO")
-                        st.write("Respuesta Supabase:")
-                        st.write(response)
-                    
-                    except Exception as e:
-                        st.error(f"❌ ERROR REAL: {e}")
-                    
-                    # Activar justificación si aplica
-                    if est in ["RETARDO CRÍTICO", "Retardo", "SALIDA NO AUTORIZADA", "SALIDA ANTICIPADA"]:
-                        st.session_state.necesita_justificar = True
-                        st.session_state.ultimo_empleado = data
-                        st.session_state.ultima_hora = ahora.strftime("%d/%m/%Y %H:%M:%S")
-                    
-                    st.toast(f"✅ {tipo} registrada para {data}", icon="✔️")
-                
+                    h_sal = datetime.strptime(HORA_SALIDA_OFICIAL, "%H:%M:%S").time()
+                    if ahora.time() < h_sal:
+                        est = "SALIDA ANTICIPADA"
+                    else:
+                        est = "Salida a Tiempo"
+            
+                # 💾 GUARDAR EN SUPABASE
+                try:
+                    response = supabase.table("registros").insert({
+                        "empleado": data,
+                        "fecha_hora": ahora.strftime("%Y-%m-%d %H:%M:%S"),
+                        "lat": st.session_state.lat_act,
+                        "lon": st.session_state.lon_act,
+                        "tipo": tipo,
+                        "estatus": est,
+                        "min_retardo": min_r,
+                        "justificacion": ""
+                    }).execute()
+            
+                    st.success("✅ Guardado en Supabase")
+                    st.write(response)
+            
+                except Exception as e:
+                    st.error(f"❌ ERROR REAL: {e}")
+            
                 st.session_state.procesando = False
 
             # Botones de acción
