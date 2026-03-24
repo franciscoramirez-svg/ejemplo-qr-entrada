@@ -287,41 +287,43 @@ if st.session_state.ubicacion_ok:
             
                 st.session_state.procesando = False
                 st.rerun()
-
+ 
             # Botones de acción
             c1, c2 = st.columns(2)
             c1.button("📥 ENTRADA", on_click=registrar, args=("Entrada",), use_container_width=True)
             c2.button("📤 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True)
 
-            # --- PASO 3: FORMULARIO DE JUSTIFICACIÓN (Fuera de la cámara) ---
+    # --- PASO 3: FORMULARIO DE JUSTIFICACIÓN (Fuera de la cámara) ---
     if st.session_state.necesita_justificar:
         st.divider()
         with st.form("form_j"):
             st.warning(f"⚠️ JUSTIFICACIÓN REQUERIDA: {st.session_state.ultimo_empleado}")
             motivo = st.text_area("Explica el motivo de la incidencia:")
+    
             if st.form_submit_button("✅ Guardar y Finalizar"):
                 if len(motivo) > 4:
-                   try:
+                    try:
                         response = (
-                              supabase
-                              .table("registros")
-                              .update({
-                                     "justificacion": motivo
-                              })
-                              .eq("empleado", st.session_state.ultimo_empleado)
-                              .eq("fecha_hora", st.session_state.ultima_hora)
-                              .execute()
+                            supabase
+                            .table("registros")
+                            .update({
+                                "justificacion": motivo
+                            })
+                            .eq("empleado", st.session_state.ultimo_empleado)
+                            .eq("fecha_hora", st.session_state.ultima_hora)
+                            .execute()
                         )
-                
-                    st.success("✅ Justificación guardada en Supabase")
-                    st.session_state.necesita_justificar = False
-                    st.rerun()
-                
-                   except Exception as e:
-                    st.error(f"❌ Error al guardar justificación: {e}")
-
+    
+                        st.success("✅ Justificación guardada en Supabase")
+    
+                        st.session_state.necesita_justificar = False
+                        st.rerun()
+    
+                    except Exception as e:
+                        st.error(f"❌ Error al guardar justificación: {e}")
                 else:
                     st.error("⚠️ Escribe un motivo más detallado.")
+    
 
 
 # --- 5. PANEL ADMIN (Asegúrate de que esté al final del archivo) ---
