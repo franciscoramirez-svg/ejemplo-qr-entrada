@@ -8,3 +8,4 @@ qrcode
 pillow
 xlsxwriter
 supabase
+openpyxl
