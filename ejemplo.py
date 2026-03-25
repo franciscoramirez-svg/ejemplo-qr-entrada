@@ -7,6 +7,8 @@ from supabase import create_client
 import qrcode
 from io import BytesIO
 import zipfile
+import cv2
+import numpy as np
 
 # =========================
 # 🔌 SUPABASE
@@ -85,6 +87,30 @@ if st.button("Cerrar sesión"):
     st.session_state.user = None
     st.rerun()
 
+st.divider()
+st.subheader("📷 Escanear QR")
+
+foto = st.camera_input("Escanea tu QR")
+
+if foto:
+    img = cv2.imdecode(np.asarray(bytearray(foto.getvalue()), dtype=np.uint8), 1)
+    data, _, _ = cv2.QRCodeDetector().detectAndDecode(img)
+
+    if data:
+        st.success(f"QR detectado: {data}")
+
+        # 🔥 BUSCAR EMPLEADO
+        res = supabase.table("empleados")\
+            .select("*")\
+            .eq("nombre", data)\
+            .execute()
+
+        if res.data:
+            st.session_state.user = res.data[0]
+            st.success("✅ Login automático por QR")
+            st.rerun()
+        else:
+            st.error("❌ QR no válido")
 # =========================
 # 📍 REGISTRO
 # =========================
@@ -186,21 +212,30 @@ if st.session_state.justificar:
 # =========================
 # 📜 HISTORIAL
 # =========================
-st.divider()
-st.subheader("📜 Mi historial")
+#st.divider()
+#st.subheader("📜 Mi historial")
 
-df = obtener_registros()
+#df = obtener_registros()
 
-if not df.empty:
-    df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
-    df_user = df[df['empleado'] == user['nombre']]
-    st.dataframe(df_user.sort_values("fecha_hora", ascending=False))
+#if not df.empty:
+    #df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
+    #df_user = df[df['empleado'] == user['nombre']]
+    #st.dataframe(df_user.sort_values("fecha_hora", ascending=False))
 
 # =========================
 # 🧠 PANEL ADMIN
 # =========================
 if user.get("rol") == "admin":
+    
+    st.divider()
+    st.subheader("📜 Historial general")
 
+    df = obtener_registros()
+
+    if not df.empty:
+        df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
+        st.dataframe(df.sort_values("fecha_hora", ascending=False))
+        
     st.divider()
     st.subheader("🏢 Panel empresa")
 
