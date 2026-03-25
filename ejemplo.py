@@ -147,8 +147,9 @@ def registrar(tipo):
         h_sal = datetime.strptime(HORA_SALIDA, "%H:%M:%S").time()
         if ahora.time() < h_sal:
             est = "SALIDA ANTICIPADA"
-
-    supabase.table("registros").insert({
+    #
+    try:
+    response = supabase.table("registros").insert({
         "empleado": user['nombre'],
         "fecha_hora": ahora.strftime("%Y-%m-%d %H:%M:%S"),
         "lat": lat,
@@ -160,7 +161,11 @@ def registrar(tipo):
         "justificacion": ""
     }).execute()
 
-    st.success(f"✅ {tipo} registrada")
+    st.success("✅ REGISTRO GUARDADO")
+    st.write(response)
+
+except Exception as e:
+    st.error(f"❌ ERROR REAL: {e}")
 
     if est != "A Tiempo":
         st.session_state.justificar = True
