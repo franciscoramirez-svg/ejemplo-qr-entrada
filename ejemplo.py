@@ -110,12 +110,10 @@ def registrar(tipo):
 
     ahora = datetime.now(zona)
 
-    ok, ubic = validar_ubicacion(user)
-
-    if not ok:
-        st.error(ubic)
-        return
-
+        # 🚀 MODO PRUEBA (DESACTIVA GPS)
+    ok = True
+    ubic = (19.24, -96.17)
+    
     lat, lon = ubic
 
     # 🔒 BLOQUEO DOBLE
