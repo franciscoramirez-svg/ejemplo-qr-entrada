@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date
-from streamlit_js_eval import get_geolocation
 import pytz
 from math import radians, cos, sin, asin, sqrt
 from supabase import create_client
@@ -34,25 +33,6 @@ def distancia(lat1, lon1, lat2, lon2):
 def obtener_registros():
     res = supabase.table("registros").select("*").execute()
     return pd.DataFrame(res.data)
-
-def validar_ubicacion(user):
-      # 🔥 MODO PRUEBA (omite GPS)
-    return True, (19.24, -96.17)
-    #loc = get_geolocation()
-    #if not loc:
-        #return False, "Activa GPS"
-
-    lat = loc['coords']['latitude']
-    lon = loc['coords']['longitude']
-
-    suc = supabase.table("sucursales").select("*").eq("id", user['sucursal_id']).execute().data[0]
-
-    dist = distancia(lat, lon, suc['lat'], suc['lon'])
-
-    if dist <= suc['radio']:
-        return True, (lat, lon)
-
-    return False, f"Fuera de sucursal ({int(dist)}m)"
 
 # =========================
 # 🔐 SESSION
@@ -88,10 +68,10 @@ if not st.session_state.user:
 
         if res.data:
             st.session_state.user = res.data[0]
-            st.success("Bienvenido")
+            st.success("✅ Bienvenido")
             st.rerun()
         else:
-            st.error("Datos incorrectos")
+            st.error("❌ Datos incorrectos")
 
     st.stop()
 
@@ -112,24 +92,8 @@ def registrar(tipo):
 
     ahora = datetime.now(zona)
 
-        # 🚀 MODO PRUEBA (DESACTIVA GPS)
-    ok = True
-    ubic = (19.24, -96.17)
-    
-    lat, lon = ubic
-
-    # 🔒 BLOQUEO DOBLE
-    ultimo = supabase.table("registros")\
-        .select("*")\
-        .eq("empleado", user['nombre'])\
-        .order("fecha_hora", desc=True)\
-        .limit(1)\
-        .execute()
-
-    #if ultimo.data:
-        #if ultimo.data[0]['tipo'] == tipo:
-            #st.warning("⚠️ Ya registraste este movimiento")
-            #return
+    # 🔥 MODO PRUEBA (SIN GPS)
+    lat, lon = 19.24, -96.17
 
     est = "A Tiempo"
     min_r = 0
@@ -149,9 +113,9 @@ def registrar(tipo):
         h_sal = datetime.strptime(HORA_SALIDA, "%H:%M:%S").time()
         if ahora.time() < h_sal:
             est = "SALIDA ANTICIPADA"
-    
+
     try:
-        response = supabase.table("registros").insert({
+        supabase.table("registros").insert({
             "empleado": user['nombre'],
             "fecha_hora": ahora.strftime("%Y-%m-%d %H:%M:%S"),
             "lat": lat,
@@ -165,19 +129,19 @@ def registrar(tipo):
 
         st.success(f"✅ {tipo} registrada")
 
+        # Activar justificación
         if est != "A Tiempo":
             st.session_state.justificar = True
             st.session_state.hora_registro = ahora.strftime("%Y-%m-%d %H:%M:%S")
 
-        st.session_state.procesando = False
         st.rerun()
 
-        if est != "A Tiempo":
-            st.session_state.justificar = True
-            st.session_state.hora_registro = ahora.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception as e:
+        st.error(f"❌ Error: {e}")
 
-            st.rerun()
-
+# =========================
+# 🕒 BOTONES
+# =========================
 st.markdown("## 🕒 Reloj Checador")
 
 col1, col2 = st.columns(2)
@@ -201,18 +165,23 @@ if st.session_state.justificar:
         if st.form_submit_button("Guardar"):
             if len(motivo) > 4:
 
-                supabase.table("registros").update({
-                    "justificacion": motivo
-                }).eq("empleado", user['nombre'])\
-                  .eq("fecha_hora", st.session_state.hora_registro)\
-                  .execute()
+                try:
+                    supabase.table("registros").update({
+                        "justificacion": motivo
+                    }).eq("empleado", user['nombre'])\
+                      .eq("fecha_hora", st.session_state.hora_registro)\
+                      .execute()
 
-                st.success("Guardado")
-                st.session_state.justificar = False
-                st.rerun()
+                    st.success("✅ Guardado")
+
+                    st.session_state.justificar = False
+                    st.rerun()
+
+                except Exception as e:
+                    st.error(f"❌ Error: {e}")
 
             else:
-                st.error("Escribe más detalle")
+                st.error("⚠️ Escribe más detalle")
 
 # =========================
 # 📜 HISTORIAL
@@ -228,7 +197,7 @@ if not df.empty:
     st.dataframe(df_user.sort_values("fecha_hora", ascending=False))
 
 # =========================
-# 🧠 ADMIN / EMPRESA
+# 🧠 PANEL ADMIN
 # =========================
 if user.get("rol") == "admin":
 
@@ -258,21 +227,11 @@ if user.get("rol") == "admin":
         for f in faltantes:
             st.error(f)
 
-        # RANKING
-        st.subheader("🏆 Ranking puntualidad")
-        ranking = df.groupby("empleado")['min_retardo'].sum().sort_values()
-        st.bar_chart(ranking)
-
         # MAPA
         st.subheader("🗺️ Ubicaciones")
         pts = hoy.dropna(subset=['lat', 'lon'])
         if not pts.empty:
             st.map(pts)
-
-        # TENDENCIA
-        st.subheader("📊 Tendencia")
-        df['dia'] = df['fecha_hora'].dt.date
-        st.line_chart(df.groupby('dia').size())
 
     # =========================
     # 📦 QR MASIVO ZIP
@@ -291,35 +250,4 @@ if user.get("rol") == "admin":
                 qr.save(img_bytes, format='PNG')
                 z.writestr(f"{emp['nombre']}.png", img_bytes.getvalue())
 
-        st.download_button("Descargar ZIP", zip_buffer.getvalue(), "QR_empleados.zip")
-
-    # =========================
-    # 📦 CARGA MASIVA
-    # =========================
-    st.subheader("📦 Carga masiva empleados")
-
-    archivo = st.file_uploader("Sube Excel", type=["xlsx"])
-
-    if archivo:
-        df_excel = pd.read_excel(archivo)
-        st.dataframe(df_excel)
-
-        if st.button("Subir empleados"):
-
-            for _, row in df_excel.iterrows():
-
-                suc = supabase.table("sucursales")\
-                    .select("*")\
-                    .eq("nombre", row['sucursal'])\
-                    .execute()
-
-                if suc.data:
-                    supabase.table("empleados").insert({
-                        "nombre": row['nombre'],
-                        "pin": row['pin'],
-                        "activo": True,
-                        "rol": row.get('rol', 'empleado'),
-                        "sucursal_id": suc.data[0]['id']
-                    }).execute()
-
-            st.success("✅ Empleados cargados")
+        st.download_button("📥 Descargar ZIP", zip_buffer.getvalue(), "QR_empleados.zip")
