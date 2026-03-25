@@ -108,21 +108,14 @@ def registrar(tipo):
     ahora = datetime.now(zona)
 
     ok, ubic = validar_ubicacion(user)
+
     if not ok:
-        st.error(ubic)
+        st.error(f"❌ Error ubicación: {ubic}")
         return
-        
-    st.write("DEBUG UBICACIÓN:", ubic)    
+    else:
+        st.success("📍 Ubicación OK")
 
     lat, lon = ubic
-
-    # evitar duplicado
-    df = obtener_registros()
-    if not df.empty:
-        ult = df[df['empleado'] == user['nombre']].tail(1)
-        if not ult.empty and ult['tipo'].values[0] == tipo:
-            st.warning("⚠️ Ya registraste este movimiento")
-            return
 
     est = "A Tiempo"
     min_r = 0
@@ -143,19 +136,24 @@ def registrar(tipo):
         if ahora.time() < h_sal:
             est = "SALIDA ANTICIPADA"
 
-    supabase.table("registros").insert({
-        "empleado": user['nombre'],
-        "fecha_hora": ahora.strftime("%Y-%m-%d %H:%M:%S"),
-        "lat": lat,
-        "lon": lon,
-        "tipo": tipo,
-        "estatus": est,
-        "min_retardo": min_r,
-        "sucursal_id": user['sucursal_id'],
-        "justificacion": ""
-    }).execute()
+    try:
+        supabase.table("registros").insert({
+            "empleado": user['nombre'],
+            "fecha_hora": ahora.strftime("%Y-%m-%d %H:%M:%S"),
+            "lat": lat,
+            "lon": lon,
+            "tipo": tipo,
+            "estatus": est,
+            "min_retardo": min_r,
+            "sucursal_id": user['sucursal_id'],
+            "justificacion": ""
+        }).execute()
 
-    st.success(f"✅ {tipo} registrada")
+        st.success(f"✅ {tipo} registrada correctamente")
+
+    except Exception as e:
+        st.error(f"❌ Error Supabase: {e}")
+        return
 
     if est != "A Tiempo":
         st.session_state.justificar = True
