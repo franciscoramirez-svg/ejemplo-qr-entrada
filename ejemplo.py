@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import pytz
 from supabase import create_client
 import qrcode
@@ -46,6 +46,8 @@ if 'hora_registro' not in st.session_state:
     st.session_state.hora_registro = ""
 if 'modo_kiosco' not in st.session_state:
     st.session_state.modo_kiosco = False
+if 'pendiente' not in st.session_state:
+    st.session_state.pendiente = False
 
 st.set_page_config(layout="wide")
 
@@ -55,6 +57,7 @@ st.set_page_config(layout="wide")
 if not st.session_state.user:
 
     st.title("🏢 NEOMOTIC Access PRO")
+
     nombre = st.text_input("Nombre")
     pin = st.text_input("PIN", type="password")
 
@@ -82,23 +85,63 @@ st.title("🏢 NEOMOTIC Access PRO")
 st.success(f"👤 {user['nombre']} | {user.get('rol','empleado')}")
 
 # =========================
-# 🖥️ KIOSCO CONTROL
+# 🔘 CONTROLES
 # =========================
-if user.get("rol") == "admin":
-    c1, c2 = st.columns(2)
-    if c1.button("🖥️ Activar Kiosco"):
-        st.session_state.modo_kiosco = True
-    if c2.button("❌ Salir Kiosco"):
-        st.session_state.modo_kiosco = False
-
 if st.button("🚪 Cerrar sesión"):
     st.session_state.user = None
     st.rerun()
+
+if user.get("rol") == "admin":
+    col1, col2 = st.columns(2)
+    if col1.button("🖥️ Activar Kiosco"):
+        st.session_state.modo_kiosco = True
+    if col2.button("❌ Salir Kiosco"):
+        st.session_state.modo_kiosco = False
+
+# =========================
+# 🧠 VALIDACIONES PRO
+# =========================
+def validar_flujo(nombre, tipo):
+
+    df = obtener_registros()
+
+    if df.empty:
+        return True, ""
+
+    df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
+
+    ult = df[df['empleado'] == nombre].sort_values("fecha_hora").tail(1)
+
+    hoy = date.today()
+    ayer = hoy - timedelta(days=1)
+
+    # ❌ SALIDA sin entrada hoy
+    if tipo == "Salida":
+        hoy_regs = df[(df['empleado'] == nombre) & (df['fecha_hora'].dt.date == hoy)]
+        if not any(hoy_regs['tipo'] == "Entrada"):
+            return False, "⚠️ No puedes registrar SALIDA sin ENTRADA"
+
+    # ❌ Entrada sin cerrar día anterior
+    if tipo == "Entrada":
+        ayer_regs = df[(df['empleado'] == nombre) & (df['fecha_hora'].dt.date == ayer)]
+
+        if any(ayer_regs['tipo'] == "Entrada") and not any(ayer_regs['tipo'] == "Salida"):
+            st.session_state.justificar = True
+            st.session_state.pendiente = True
+            return False, "⚠️ Debes justificar falta de salida de ayer"
+
+    return True, ""
 
 # =========================
 # 📍 REGISTRAR
 # =========================
 def registrar(nombre, tipo):
+
+    ok, msg = validar_flujo(nombre, tipo)
+
+    if not ok:
+        st.error(msg)
+        return
 
     ahora = datetime.now(zona)
 
@@ -109,7 +152,9 @@ def registrar(nombre, tipo):
         h_lim = datetime.strptime(HORA_ENTRADA, "%H:%M:%S").time()
         diff = (datetime.combine(date.today(), ahora.time()) -
                 datetime.combine(date.today(), h_lim)).total_seconds() / 60
+
         min_r = max(0, int(diff))
+
         if min_r > 30:
             est = "RETARDO CRÍTICO"
         elif min_r > 15:
@@ -128,13 +173,18 @@ def registrar(nombre, tipo):
         "estatus": est,
         "min_retardo": min_r,
         "sucursal_id": user['sucursal_id'],
-        "justificacion": ""
+        "justificacion": "",
+        "horas_extra": False
     }).execute()
 
     st.success(f"✅ {nombre} - {tipo}")
 
+    if est != "A Tiempo":
+        st.session_state.justificar = True
+        st.session_state.hora_registro = ahora.strftime("%Y-%m-%d %H:%M:%S")
+
 # =========================
-# 🖥️ MODO KIOSCO PRO (QR)
+# 🖥️ KIOSCO QR
 # =========================
 if st.session_state.modo_kiosco:
 
@@ -164,8 +214,32 @@ if st.session_state.modo_kiosco:
 c1, c2 = st.columns(2)
 if c1.button("📥 ENTRADA"):
     registrar(user['nombre'], "Entrada")
+
 if c2.button("📤 SALIDA"):
     registrar(user['nombre'], "Salida")
+
+# =========================
+# ⚠️ JUSTIFICACIÓN
+# =========================
+if st.session_state.justificar:
+
+    st.divider()
+
+    with st.form("just"):
+        motivo = st.text_area("Justificación requerida")
+
+        if st.form_submit_button("Guardar"):
+            if len(motivo) > 4:
+
+                supabase.table("registros").update({
+                    "justificacion": motivo
+                }).eq("empleado", user['nombre']).execute()
+
+                st.success("✅ Guardado")
+                st.session_state.justificar = False
+
+            else:
+                st.error("Escribe más detalle")
 
 # =========================
 # 📊 ADMIN
@@ -188,30 +262,26 @@ if user.get("rol") == "admin":
         c3.metric("Faltas", len(obtener_empleados()) - len(hoy['empleado'].unique()))
 
         st.line_chart(df.groupby(df['fecha_hora'].dt.date).size())
-
         st.dataframe(hoy)
 
-        # MAPA
-        pts = hoy.dropna(subset=['lat','lon'])
-        if not pts.empty:
-            st.map(pts)
+        # Horas extra
+        st.subheader("⏱️ Autorizar horas extra")
 
-        # =========================
-        # 🏢 MULTI SUCURSAL
-        # =========================
-        sucursales = obtener_sucursales()
-        nombres = [s['nombre'] for s in sucursales]
-
-        sel = st.selectbox("Sucursal", nombres)
-
-        if sel:
-            suc_id = [s['id'] for s in sucursales if s['nombre']==sel][0]
-            st.dataframe(df[df['sucursal_id']==suc_id])
+        for i, row in hoy.iterrows():
+            col1, col2 = st.columns([3,1])
+            col1.write(f"{row['empleado']} - {row['estatus']}")
+            if col2.button("Autorizar", key=i):
+                supabase.table("registros").update({
+                    "horas_extra": True
+                }).eq("id", row['id']).execute()
+                st.success("Autorizado")
 
     # =========================
     # 📦 QR ZIP
     # =========================
-    if st.button("📦 Generar QR ZIP"):
+    st.subheader("📦 QR empleados")
+
+    if st.button("Generar QR ZIP"):
 
         empleados = obtener_empleados()
         zip_buffer = BytesIO()
