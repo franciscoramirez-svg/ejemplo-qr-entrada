@@ -118,8 +118,57 @@ def registrar(tipo):
 
     lat, lon = ubic
 
- # 🔒 BLOQUEO DOBLE
+    # 🔒 BLOQUEO DOBLE
+    ultimo = supabase.table("registros")\
+        .select("*")\
+        .eq("empleado", user['nombre'])\
+        .order("fecha_hora", desc=True)\
+        .limit(1)\
+        .execute()
 
+    if ultimo.data:
+        if ultimo.data[0]['tipo'] == tipo:
+            st.warning("⚠️ Ya registraste este movimiento")
+            return
+
+    est = "A Tiempo"
+    min_r = 0
+
+    if tipo == "Entrada":
+        h_lim = datetime.strptime(HORA_ENTRADA, "%H:%M:%S").time()
+        diff = (datetime.combine(date.today(), ahora.time()) -
+                datetime.combine(date.today(), h_lim)).total_seconds() / 60
+        min_r = max(0, int(diff))
+
+        if min_r > 30:
+            est = "RETARDO CRÍTICO"
+        elif min_r > 15:
+            est = "Retardo"
+
+    if tipo == "Salida":
+        h_sal = datetime.strptime(HORA_SALIDA, "%H:%M:%S").time()
+        if ahora.time() < h_sal:
+            est = "SALIDA ANTICIPADA"
+
+    supabase.table("registros").insert({
+        "empleado": user['nombre'],
+        "fecha_hora": ahora.strftime("%Y-%m-%d %H:%M:%S"),
+        "lat": lat,
+        "lon": lon,
+        "tipo": tipo,
+        "estatus": est,
+        "min_retardo": min_r,
+        "sucursal_id": user['sucursal_id'],
+        "justificacion": ""
+    }).execute()
+
+    st.success(f"✅ {tipo} registrada")
+
+    if est != "A Tiempo":
+        st.session_state.justificar = True
+        st.session_state.hora_registro = ahora.strftime("%Y-%m-%d %H:%M:%S")
+
+    st.rerun()
 
 st.markdown("## 🕒 Reloj Checador")
 
@@ -127,8 +176,6 @@ col1, col2 = st.columns(2)
 col1.button("🟢 ENTRADA", on_click=registrar, args=("Entrada",), use_container_width=True)
 col2.button("🔴 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True)
 
-
-   
 # =========================
 # ⚠️ JUSTIFICACIÓN
 # =========================
