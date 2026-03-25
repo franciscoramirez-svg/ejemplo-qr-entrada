@@ -118,6 +118,16 @@ def registrar(tipo):
 
     lat, lon = ubic
 
+ # 🔒 BLOQUEO DOBLE
+
+
+st.markdown("## 🕒 Reloj Checador")
+
+col1, col2 = st.columns(2)
+col1.button("🟢 ENTRADA", on_click=registrar, args=("Entrada",), use_container_width=True)
+col2.button("🔴 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True)
+
+
    
 # =========================
 # ⚠️ JUSTIFICACIÓN
