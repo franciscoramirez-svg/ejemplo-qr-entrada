@@ -7,8 +7,6 @@ from supabase import create_client
 import qrcode
 from io import BytesIO
 import zipfile
-import cv2
-import numpy as np
 
 # =========================
 # 🔌 SUPABASE
@@ -27,14 +25,15 @@ HORA_SALIDA = "17:00:00"
 # =========================
 # 🧠 FUNCIONES
 # =========================
-def distancia(lat1, lon1, lat2, lon2):
-    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
-    a = sin((lat2-lat1)/2)**2 + cos(lat1)*cos(lat2)*sin((lon2-lon1)/2)**2
-    return (2 * asin(sqrt(a))) * 6371000
-
 def obtener_registros():
     res = supabase.table("registros").select("*").execute()
     return pd.DataFrame(res.data)
+
+def obtener_empleados():
+    return supabase.table("empleados").select("*").execute().data
+
+def obtener_sucursales():
+    return supabase.table("sucursales").select("*").execute().data
 
 # =========================
 # 🔐 SESSION
@@ -45,15 +44,17 @@ if 'justificar' not in st.session_state:
     st.session_state.justificar = False
 if 'hora_registro' not in st.session_state:
     st.session_state.hora_registro = ""
+if 'modo_kiosco' not in st.session_state:
+    st.session_state.modo_kiosco = False
 
 st.set_page_config(layout="wide")
-st.title("🏢 NEOMOTIC Access PRO")
 
 # =========================
 # 🔐 LOGIN
 # =========================
 if not st.session_state.user:
 
+    st.title("🏢 NEOMOTIC Access PRO")
     st.subheader("🔐 Login")
 
     nombre = st.text_input("Nombre")
@@ -81,36 +82,21 @@ if not st.session_state.user:
 # 👤 USUARIO
 # =========================
 user = st.session_state.user
-st.success(f"👤 {user['nombre']} | Rol: {user.get('rol','empleado')}")
 
-if st.button("Cerrar sesión"):
+st.title("🏢 NEOMOTIC Access PRO")
+st.success(f"👤 {user['nombre']} | {user.get('rol','empleado')}")
+
+colA, colB = st.columns(2)
+
+if colA.button("🚪 Cerrar sesión"):
     st.session_state.user = None
     st.rerun()
 
-st.divider()
-st.subheader("📷 Escanear QR")
+if user.get("rol") == "admin":
+    if colB.button("🖥️ Modo Kiosco"):
+        st.session_state.modo_kiosco = not st.session_state.modo_kiosco
+        st.rerun()
 
-foto = st.camera_input("Escanea tu QR")
-
-if foto:
-    img = cv2.imdecode(np.asarray(bytearray(foto.getvalue()), dtype=np.uint8), 1)
-    data, _, _ = cv2.QRCodeDetector().detectAndDecode(img)
-
-    if data:
-        st.success(f"QR detectado: {data}")
-
-        # 🔥 BUSCAR EMPLEADO
-        res = supabase.table("empleados")\
-            .select("*")\
-            .eq("nombre", data)\
-            .execute()
-
-        if res.data:
-            st.session_state.user = res.data[0]
-            st.success("✅ Login automático por QR")
-            st.rerun()
-        else:
-            st.error("❌ QR no válido")
 # =========================
 # 📍 REGISTRO
 # =========================
@@ -118,7 +104,7 @@ def registrar(tipo):
 
     ahora = datetime.now(zona)
 
-    # 🔥 MODO PRUEBA (SIN GPS)
+    # 🔥 MODO PRUEBA (sin GPS)
     lat, lon = 19.24, -96.17
 
     est = "A Tiempo"
@@ -140,58 +126,66 @@ def registrar(tipo):
         if ahora.time() < h_sal:
             est = "SALIDA ANTICIPADA"
 
-    try:
-        supabase.table("registros").insert({
-            "empleado": user['nombre'],
-            "fecha_hora": ahora.strftime("%Y-%m-%d %H:%M:%S"),
-            "lat": lat,
-            "lon": lon,
-            "tipo": tipo,
-            "estatus": est,
-            "min_retardo": min_r,
-            "sucursal_id": user['sucursal_id'],
-            "justificacion": ""
-        }).execute()
+    supabase.table("registros").insert({
+        "empleado": user['nombre'],
+        "fecha_hora": ahora.strftime("%Y-%m-%d %H:%M:%S"),
+        "lat": lat,
+        "lon": lon,
+        "tipo": tipo,
+        "estatus": est,
+        "min_retardo": min_r,
+        "sucursal_id": user['sucursal_id'],
+        "justificacion": ""
+    }).execute()
 
-        st.success(f"✅ {tipo} registrada")
+    st.success(f"✅ {tipo} registrada")
 
-        # Activar justificación
-        if est != "A Tiempo":
-            st.session_state.justificar = True
-            st.session_state.hora_registro = ahora.strftime("%Y-%m-%d %H:%M:%S")
-
-        st.rerun()
-
-    except Exception as e:
-        st.error(f"❌ Error: {e}")
+    if est != "A Tiempo":
+        st.session_state.justificar = True
+        st.session_state.hora_registro = ahora.strftime("%Y-%m-%d %H:%M:%S")
 
 # =========================
-# 🕒 BOTONES
+# 🖥️ MODO KIOSCO
 # =========================
-st.markdown("## 🕒 Reloj Checador")
+if st.session_state.modo_kiosco:
 
-col1, col2 = st.columns(2)
+    st.markdown("## 🕒 RELOJ CHECADOR")
 
-if col1.button("📥 ENTRADA"):
-    registrar("Entrada")
+    c1, c2 = st.columns(2)
 
-if col2.button("📤 SALIDA"):
-    registrar("Salida")
+    if c1.button("📥 ENTRADA", use_container_width=True):
+        registrar("Entrada")
+
+    if c2.button("📤 SALIDA", use_container_width=True):
+        registrar("Salida")
 
 # =========================
-# ⚠️ JUSTIFICACIÓN
+# 🧾 MODO NORMAL
 # =========================
-if st.session_state.justificar:
+else:
 
-    st.divider()
+    st.markdown("## 🕒 Registro")
 
-    with st.form("just"):
-        motivo = st.text_area("Justificación requerida")
+    c1, c2 = st.columns(2)
 
-        if st.form_submit_button("Guardar"):
-            if len(motivo) > 4:
+    if c1.button("📥 ENTRADA"):
+        registrar("Entrada")
 
-                try:
+    if c2.button("📤 SALIDA"):
+        registrar("Salida")
+
+    # =========================
+    # ⚠️ JUSTIFICACIÓN
+    # =========================
+    if st.session_state.justificar:
+        st.divider()
+
+        with st.form("just"):
+            motivo = st.text_area("Justificación requerida")
+
+            if st.form_submit_button("Guardar"):
+                if len(motivo) > 4:
+
                     supabase.table("registros").update({
                         "justificacion": motivo
                     }).eq("empleado", user['nombre'])\
@@ -199,45 +193,18 @@ if st.session_state.justificar:
                       .execute()
 
                     st.success("✅ Guardado")
-
                     st.session_state.justificar = False
-                    st.rerun()
 
-                except Exception as e:
-                    st.error(f"❌ Error: {e}")
-
-            else:
-                st.error("⚠️ Escribe más detalle")
+                else:
+                    st.error("Escribe más detalle")
 
 # =========================
-# 📜 HISTORIAL
-# =========================
-#st.divider()
-#st.subheader("📜 Mi historial")
-
-#df = obtener_registros()
-
-#if not df.empty:
-    #df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
-    #df_user = df[df['empleado'] == user['nombre']]
-    #st.dataframe(df_user.sort_values("fecha_hora", ascending=False))
-
-# =========================
-# 🧠 PANEL ADMIN
+# 📜 SOLO ADMIN
 # =========================
 if user.get("rol") == "admin":
-    
-    st.divider()
-    st.subheader("📜 Historial general")
 
-    df = obtener_registros()
-
-    if not df.empty:
-        df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
-        st.dataframe(df.sort_values("fecha_hora", ascending=False))
-        
     st.divider()
-    st.subheader("🏢 Panel empresa")
+    st.subheader("🏢 Panel Empresa")
 
     df = obtener_registros()
 
@@ -247,14 +214,16 @@ if user.get("rol") == "admin":
         hoy = df[df['fecha_hora'].dt.date == datetime.now().date()]
 
         # KPIs
-        col1, col2 = st.columns(2)
-        col1.metric("Registros hoy", len(hoy))
-        col2.metric("Retardos", len(hoy[hoy['estatus'].str.contains("Retardo")]))
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Registros hoy", len(hoy))
+        c2.metric("Retardos", len(hoy[hoy['estatus'].str.contains("Retardo")]))
+        c3.metric("Salidas anticipadas", len(hoy[hoy['estatus']=="SALIDA ANTICIPADA"]))
 
+        # Tabla
         st.dataframe(hoy)
 
-        # FALTANTES
-        empleados = supabase.table("empleados").select("*").execute().data
+        # Faltantes
+        empleados = obtener_empleados()
         presentes = hoy['empleado'].unique()
         faltantes = [e['nombre'] for e in empleados if e['nombre'] not in presentes]
 
@@ -262,7 +231,12 @@ if user.get("rol") == "admin":
         for f in faltantes:
             st.error(f)
 
-        # MAPA
+        # Ranking
+        st.subheader("🏆 Ranking")
+        ranking = df.groupby("empleado")['min_retardo'].sum().sort_values()
+        st.bar_chart(ranking)
+
+        # Mapa
         st.subheader("🗺️ Ubicaciones")
         pts = hoy.dropna(subset=['lat', 'lon'])
         if not pts.empty:
@@ -271,11 +245,11 @@ if user.get("rol") == "admin":
     # =========================
     # 📦 QR MASIVO ZIP
     # =========================
-    st.subheader("📦 QR masivo")
+    st.subheader("📦 QR empleados")
 
-    if st.button("Generar QR ZIP"):
+    if st.button("Generar ZIP"):
 
-        empleados = supabase.table("empleados").select("*").execute().data
+        empleados = obtener_empleados()
         zip_buffer = BytesIO()
 
         with zipfile.ZipFile(zip_buffer, "w") as z:
@@ -285,4 +259,19 @@ if user.get("rol") == "admin":
                 qr.save(img_bytes, format='PNG')
                 z.writestr(f"{emp['nombre']}.png", img_bytes.getvalue())
 
-        st.download_button("📥 Descargar ZIP", zip_buffer.getvalue(), "QR_empleados.zip")
+        st.download_button("Descargar ZIP", zip_buffer.getvalue(), "QR_empleados.zip")
+
+    # =========================
+    # 🏢 MULTI SUCURSAL
+    # =========================
+    st.subheader("🏢 Sucursales")
+
+    sucursales = obtener_sucursales()
+    nombres = [s['nombre'] for s in sucursales]
+
+    sel = st.selectbox("Selecciona sucursal", nombres)
+
+    if sel:
+        suc_id = [s['id'] for s in sucursales if s['nombre']==sel][0]
+        df_suc = df[df['sucursal_id']==suc_id]
+        st.dataframe(df_suc)
