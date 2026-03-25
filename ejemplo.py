@@ -97,7 +97,7 @@ if not st.session_state.user:
 # 👤 USUARIO
 # =========================
 user = st.session_state.user
-st.success(f"👤 {user['nombre']}")
+st.success(f"👤 {user['nombre']} | Rol: {user.get('rol','empleado')}")
 
 if st.button("Cerrar sesión"):
     st.session_state.user = None
@@ -117,6 +117,19 @@ def registrar(tipo):
         return
 
     lat, lon = ubic
+
+    # 🔒 BLOQUEO DOBLE
+    ultimo = supabase.table("registros")\
+        .select("*")\
+        .eq("empleado", user['nombre'])\
+        .order("fecha_hora", desc=True)\
+        .limit(1)\
+        .execute()
+
+    if ultimo.data:
+        if ultimo.data[0]['tipo'] == tipo:
+            st.warning("⚠️ Ya registraste este movimiento")
+            return
 
     est = "A Tiempo"
     min_r = 0
@@ -157,9 +170,11 @@ def registrar(tipo):
 
     st.rerun()
 
+st.markdown("## 🕒 Reloj Checador")
+
 col1, col2 = st.columns(2)
-col1.button("📥 ENTRADA", on_click=registrar, args=("Entrada",))
-col2.button("📤 SALIDA", on_click=registrar, args=("Salida",))
+col1.button("🟢 ENTRADA", on_click=registrar, args=("Entrada",), use_container_width=True)
+col2.button("🔴 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True)
 
 # =========================
 # ⚠️ JUSTIFICACIÓN
@@ -169,7 +184,7 @@ if st.session_state.justificar:
     st.divider()
 
     with st.form("just"):
-        motivo = st.text_area("Justificación")
+        motivo = st.text_area("Justificación requerida")
 
         if st.form_submit_button("Guardar"):
             if len(motivo) > 4:
@@ -183,6 +198,9 @@ if st.session_state.justificar:
                 st.success("Guardado")
                 st.session_state.justificar = False
                 st.rerun()
+
+            else:
+                st.error("Escribe más detalle")
 
 # =========================
 # 📜 HISTORIAL
@@ -198,7 +216,7 @@ if not df.empty:
     st.dataframe(df_user.sort_values("fecha_hora", ascending=False))
 
 # =========================
-# 🧠 ADMIN
+# 🧠 ADMIN / EMPRESA
 # =========================
 if user.get("rol") == "admin":
 
@@ -212,20 +230,37 @@ if user.get("rol") == "admin":
         df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
         hoy = df[df['fecha_hora'].dt.date == datetime.now().date()]
 
+        # KPIs
         col1, col2 = st.columns(2)
         col1.metric("Registros hoy", len(hoy))
         col2.metric("Retardos", len(hoy[hoy['estatus'].str.contains("Retardo")]))
 
         st.dataframe(hoy)
 
-        st.subheader("Ranking")
+        # FALTANTES
+        empleados = supabase.table("empleados").select("*").execute().data
+        presentes = hoy['empleado'].unique()
+        faltantes = [e['nombre'] for e in empleados if e['nombre'] not in presentes]
+
+        st.subheader("🚫 Faltantes")
+        for f in faltantes:
+            st.error(f)
+
+        # RANKING
+        st.subheader("🏆 Ranking puntualidad")
         ranking = df.groupby("empleado")['min_retardo'].sum().sort_values()
         st.bar_chart(ranking)
 
-        st.subheader("Mapa")
+        # MAPA
+        st.subheader("🗺️ Ubicaciones")
         pts = hoy.dropna(subset=['lat', 'lon'])
         if not pts.empty:
             st.map(pts)
+
+        # TENDENCIA
+        st.subheader("📊 Tendencia")
+        df['dia'] = df['fecha_hora'].dt.date
+        st.line_chart(df.groupby('dia').size())
 
     # =========================
     # 📦 QR MASIVO ZIP
@@ -233,8 +268,8 @@ if user.get("rol") == "admin":
     st.subheader("📦 QR masivo")
 
     if st.button("Generar QR ZIP"):
-        empleados = supabase.table("empleados").select("*").execute().data
 
+        empleados = supabase.table("empleados").select("*").execute().data
         zip_buffer = BytesIO()
 
         with zipfile.ZipFile(zip_buffer, "w") as z:
@@ -244,18 +279,17 @@ if user.get("rol") == "admin":
                 qr.save(img_bytes, format='PNG')
                 z.writestr(f"{emp['nombre']}.png", img_bytes.getvalue())
 
-        st.download_button("Descargar ZIP", zip_buffer.getvalue(), "QR.zip")
+        st.download_button("Descargar ZIP", zip_buffer.getvalue(), "QR_empleados.zip")
 
     # =========================
     # 📦 CARGA MASIVA
     # =========================
-    st.subheader("📦 Carga masiva")
+    st.subheader("📦 Carga masiva empleados")
 
-    archivo = st.file_uploader("Excel empleados", type=["xlsx"])
+    archivo = st.file_uploader("Sube Excel", type=["xlsx"])
 
     if archivo:
         df_excel = pd.read_excel(archivo)
-
         st.dataframe(df_excel)
 
         if st.button("Subir empleados"):
@@ -276,4 +310,4 @@ if user.get("rol") == "admin":
                         "sucursal_id": suc.data[0]['id']
                     }).execute()
 
-            st.success("Empleados cargados")
+            st.success("✅ Empleados cargados")
