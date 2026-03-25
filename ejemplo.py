@@ -124,10 +124,10 @@ def registrar(tipo):
         .limit(1)\
         .execute()
 
-    if ultimo.data:
-        if ultimo.data[0]['tipo'] == tipo:
-            st.warning("⚠️ Ya registraste este movimiento")
-            return
+    #if ultimo.data:
+        #if ultimo.data[0]['tipo'] == tipo:
+            #st.warning("⚠️ Ya registraste este movimiento")
+            #return
 
     est = "A Tiempo"
     min_r = 0
