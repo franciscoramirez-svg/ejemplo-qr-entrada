@@ -147,7 +147,7 @@ def registrar(tipo):
         h_sal = datetime.strptime(HORA_SALIDA, "%H:%M:%S").time()
         if ahora.time() < h_sal:
             est = "SALIDA ANTICIPADA"
-    #
+    
     try:
     response = supabase.table("registros").insert({
         "empleado": user['nombre'],
