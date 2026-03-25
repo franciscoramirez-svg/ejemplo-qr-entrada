@@ -275,8 +275,12 @@ st.subheader("📦 Carga masiva de empleados")
 
 archivo = st.file_uploader("Sube Excel", type=["xlsx"])
 
-if archivo:
-    df = pd.read_excel(archivo)
+if archivo is not None:
+    try:
+        df = pd.read_excel(archivo)
+        st.dataframe(df)
+    except Exception as e:
+        st.error(f"Error leyendo Excel: {e}")
     st.dataframe(df)
 
     if st.button("🚀 Subir empleados"):
