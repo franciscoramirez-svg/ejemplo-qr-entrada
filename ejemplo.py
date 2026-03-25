@@ -9,28 +9,31 @@ import qrcode
 from io import BytesIO
 import zipfile
 
-# --- SUPABASE ---
+# =========================
+# 🔌 SUPABASE
+# =========================
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- CONFIG ---
+# =========================
+# ⚙️ CONFIG
+# =========================
 zona = pytz.timezone('America/Mexico_City')
 HORA_ENTRADA = "07:00:00"
 HORA_SALIDA = "17:00:00"
 
-# --- FUNCIONES ---
+# =========================
+# 🧠 FUNCIONES
+# =========================
 def distancia(lat1, lon1, lat2, lon2):
     lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
     a = sin((lat2-lat1)/2)**2 + cos(lat1)*cos(lat2)*sin((lon2-lon1)/2)**2
     return (2 * asin(sqrt(a))) * 6371000
 
 def obtener_registros():
-    try:
-        res = supabase.table("registros").select("*").execute()
-        return pd.DataFrame(res.data)
-    except:
-        return pd.DataFrame()
+    res = supabase.table("registros").select("*").execute()
+    return pd.DataFrame(res.data)
 
 def validar_ubicacion(user):
     loc = get_geolocation()
@@ -40,10 +43,7 @@ def validar_ubicacion(user):
     lat = loc['coords']['latitude']
     lon = loc['coords']['longitude']
 
-    suc = supabase.table("sucursales")\
-        .select("*")\
-        .eq("id", user['sucursal_id'])\
-        .execute().data[0]
+    suc = supabase.table("sucursales").select("*").eq("id", user['sucursal_id']).execute().data[0]
 
     dist = distancia(lat, lon, suc['lat'], suc['lon'])
 
@@ -52,13 +52,13 @@ def validar_ubicacion(user):
 
     return False, f"Fuera de sucursal ({int(dist)}m)"
 
-# --- SESSION STATE ---
+# =========================
+# 🔐 SESSION
+# =========================
 if 'user' not in st.session_state:
     st.session_state.user = None
-
 if 'justificar' not in st.session_state:
     st.session_state.justificar = False
-
 if 'hora_registro' not in st.session_state:
     st.session_state.hora_registro = ""
 
@@ -69,12 +69,14 @@ st.title("🏢 NEOMOTIC Access PRO")
 # 🔐 LOGIN
 # =========================
 if not st.session_state.user:
-    st.subheader("🔐 Login empleado")
+
+    st.subheader("🔐 Login")
 
     nombre = st.text_input("Nombre")
     pin = st.text_input("PIN", type="password")
 
     if st.button("Ingresar"):
+
         res = supabase.table("empleados")\
             .select("*")\
             .eq("nombre", nombre)\
@@ -84,10 +86,10 @@ if not st.session_state.user:
 
         if res.data:
             st.session_state.user = res.data[0]
-            st.success("✅ Bienvenido")
+            st.success("Bienvenido")
             st.rerun()
         else:
-            st.error("❌ Datos incorrectos")
+            st.error("Datos incorrectos")
 
     st.stop()
 
@@ -105,15 +107,14 @@ if st.button("Cerrar sesión"):
 # 📍 REGISTRO
 # =========================
 def registrar(tipo):
+
     ahora = datetime.now(zona)
 
     ok, ubic = validar_ubicacion(user)
 
     if not ok:
-        st.error(f"❌ Error ubicación: {ubic}")
+        st.error(ubic)
         return
-    else:
-        st.success("📍 Ubicación OK")
 
     lat, lon = ubic
 
@@ -136,24 +137,19 @@ def registrar(tipo):
         if ahora.time() < h_sal:
             est = "SALIDA ANTICIPADA"
 
-    try:
-        supabase.table("registros").insert({
-            "empleado": user['nombre'],
-            "fecha_hora": ahora.strftime("%Y-%m-%d %H:%M:%S"),
-            "lat": lat,
-            "lon": lon,
-            "tipo": tipo,
-            "estatus": est,
-            "min_retardo": min_r,
-            "sucursal_id": user['sucursal_id'],
-            "justificacion": ""
-        }).execute()
+    supabase.table("registros").insert({
+        "empleado": user['nombre'],
+        "fecha_hora": ahora.strftime("%Y-%m-%d %H:%M:%S"),
+        "lat": lat,
+        "lon": lon,
+        "tipo": tipo,
+        "estatus": est,
+        "min_retardo": min_r,
+        "sucursal_id": user['sucursal_id'],
+        "justificacion": ""
+    }).execute()
 
-        st.success(f"✅ {tipo} registrada correctamente")
-
-    except Exception as e:
-        st.error(f"❌ Error Supabase: {e}")
-        return
+    st.success(f"✅ {tipo} registrada")
 
     if est != "A Tiempo":
         st.session_state.justificar = True
@@ -169,27 +165,24 @@ col2.button("📤 SALIDA", on_click=registrar, args=("Salida",))
 # ⚠️ JUSTIFICACIÓN
 # =========================
 if st.session_state.justificar:
+
     st.divider()
 
     with st.form("just"):
-        motivo = st.text_area("Justificación requerida")
+        motivo = st.text_area("Justificación")
 
         if st.form_submit_button("Guardar"):
             if len(motivo) > 4:
+
                 supabase.table("registros").update({
                     "justificacion": motivo
                 }).eq("empleado", user['nombre'])\
                   .eq("fecha_hora", st.session_state.hora_registro)\
                   .execute()
 
-                st.success("✅ Justificación guardada")
-
+                st.success("Guardado")
                 st.session_state.justificar = False
-                st.session_state.hora_registro = ""
-
                 st.rerun()
-            else:
-                st.error("Escribe más detalle")
 
 # =========================
 # 📜 HISTORIAL
@@ -201,111 +194,86 @@ df = obtener_registros()
 
 if not df.empty:
     df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
-    df_user = df[df['empleado'] == user['nombre']].sort_values("fecha_hora", ascending=False)
-    st.dataframe(df_user, use_container_width=True)
+    df_user = df[df['empleado'] == user['nombre']]
+    st.dataframe(df_user.sort_values("fecha_hora", ascending=False))
 
 # =========================
-# 🧠 DASHBOARD EMPRESA
+# 🧠 ADMIN
 # =========================
-st.divider()
-with st.expander("🔐 Panel empresa"):
+if user.get("rol") == "admin":
 
-    if st.text_input("Password admin", type="password") == "NEOMOTIC2024":
+    st.divider()
+    st.subheader("🏢 Panel empresa")
 
-        df = obtener_registros()
+    df = obtener_registros()
 
-        if df.empty:
-            st.warning("Sin datos")
-        else:
-            df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
-            hoy = df[df['fecha_hora'].dt.date == datetime.now().date()]
+    if not df.empty:
 
-            st.subheader("📊 KPIs")
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Registros hoy", len(hoy))
-            col2.metric("Retardos", len(hoy[hoy['estatus'].str.contains("Retardo", na=False)]))
-            col3.metric("Empleados", df['empleado'].nunique())
+        df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
+        hoy = df[df['fecha_hora'].dt.date == datetime.now().date()]
 
-            st.subheader("📋 Hoy")
-            st.dataframe(hoy, use_container_width=True)
+        col1, col2 = st.columns(2)
+        col1.metric("Registros hoy", len(hoy))
+        col2.metric("Retardos", len(hoy[hoy['estatus'].str.contains("Retardo")]))
 
-            st.subheader("🏆 Ranking puntualidad")
-            ranking = df.groupby("empleado")['min_retardo'].sum().sort_values()
-            st.bar_chart(ranking)
+        st.dataframe(hoy)
 
-            st.subheader("🗺️ Ubicaciones")
-            pts = hoy.dropna(subset=['lat', 'lon'])
-            if not pts.empty:
-                st.map(pts)
+        st.subheader("Ranking")
+        ranking = df.groupby("empleado")['min_retardo'].sum().sort_values()
+        st.bar_chart(ranking)
 
-# =========================
-# 📦 QR MASIVO ZIP
-# =========================
-st.divider()
-st.subheader("📦 Generar QR masivos")
+        st.subheader("Mapa")
+        pts = hoy.dropna(subset=['lat', 'lon'])
+        if not pts.empty:
+            st.map(pts)
 
-if st.button("🎯 Generar TODOS los QR en ZIP"):
+    # =========================
+    # 📦 QR MASIVO ZIP
+    # =========================
+    st.subheader("📦 QR masivo")
 
-    empleados = supabase.table("empleados").select("*").execute().data
+    if st.button("Generar QR ZIP"):
+        empleados = supabase.table("empleados").select("*").execute().data
 
-    if not empleados:
-        st.warning("No hay empleados")
-    else:
         zip_buffer = BytesIO()
 
-        with zipfile.ZipFile(zip_buffer, "w") as zf:
+        with zipfile.ZipFile(zip_buffer, "w") as z:
             for emp in empleados:
-                nombre = emp['nombre']
-                qr = qrcode.make(nombre)
+                qr = qrcode.make(emp['nombre'])
+                img_bytes = BytesIO()
+                qr.save(img_bytes, format='PNG')
+                z.writestr(f"{emp['nombre']}.png", img_bytes.getvalue())
 
-                img_buffer = BytesIO()
-                qr.save(img_buffer, format="PNG")
+        st.download_button("Descargar ZIP", zip_buffer.getvalue(), "QR.zip")
 
-                zf.writestr(f"{nombre}.png", img_buffer.getvalue())
+    # =========================
+    # 📦 CARGA MASIVA
+    # =========================
+    st.subheader("📦 Carga masiva")
 
-        st.download_button("⬇️ Descargar ZIP", zip_buffer.getvalue(), file_name="QR_Empleados.zip")
+    archivo = st.file_uploader("Excel empleados", type=["xlsx"])
 
-# =========================
-# 📦 CARGA MASIVA
-# =========================
-st.divider()
-st.subheader("📦 Carga masiva de empleados")
+    if archivo:
+        df_excel = pd.read_excel(archivo)
 
-archivo = st.file_uploader("Sube Excel", type=["xlsx"])
+        st.dataframe(df_excel)
 
-if archivo is not None:
-    try:
-        df = pd.read_excel(archivo)
-        st.dataframe(df)
-    except Exception as e:
-        st.error(f"Error leyendo Excel: {e}")
-    st.dataframe(df)
+        if st.button("Subir empleados"):
 
-    if st.button("🚀 Subir empleados"):
-        ok, err = 0, 0
+            for _, row in df_excel.iterrows():
 
-        for _, row in df.iterrows():
-            try:
                 suc = supabase.table("sucursales")\
-                    .select("id")\
+                    .select("*")\
                     .eq("nombre", row['sucursal'])\
                     .execute()
 
-                if not suc.data:
-                    err += 1
-                    continue
+                if suc.data:
+                    supabase.table("empleados").insert({
+                        "nombre": row['nombre'],
+                        "pin": row['pin'],
+                        "activo": True,
+                        "rol": row.get('rol', 'empleado'),
+                        "sucursal_id": suc.data[0]['id']
+                    }).execute()
 
-                supabase.table("empleados").insert({
-                    "nombre": row['nombre'],
-                    "pin": str(row['pin']),
-                    "activo": True,
-                    "sucursal_id": suc.data[0]['id']
-                }).execute()
-
-                ok += 1
-            except:
-                err += 1
-
-        st.success(f"✅ {ok} empleados cargados")
-        if err:
-            st.warning(f"⚠️ {err} errores")
+            st.success("Empleados cargados")
