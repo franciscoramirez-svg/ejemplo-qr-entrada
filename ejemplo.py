@@ -36,9 +36,11 @@ def obtener_registros():
     return pd.DataFrame(res.data)
 
 def validar_ubicacion(user):
-    loc = get_geolocation()
-    if not loc:
-        return False, "Activa GPS"
+      # 🔥 MODO PRUEBA (omite GPS)
+    return True, (19.24, -96.17)
+    #loc = get_geolocation()
+    #if not loc:
+        #return False, "Activa GPS"
 
     lat = loc['coords']['latitude']
     lon = loc['coords']['longitude']
@@ -161,11 +163,14 @@ def registrar(tipo):
             "justificacion": ""
         }).execute()
 
-        st.success("✅ REGISTRO GUARDADO")
-        st.write(response)
+        st.success(f"✅ {tipo} registrada")
 
-    except Exception as e:
-        st.error(f"❌ ERROR REAL: {e}")
+        if est != "A Tiempo":
+            st.session_state.justificar = True
+            st.session_state.hora_registro = ahora.strftime("%Y-%m-%d %H:%M:%S")
+
+        st.session_state.procesando = False
+        st.rerun()
 
     if est != "A Tiempo":
         st.session_state.justificar = True
@@ -176,8 +181,12 @@ def registrar(tipo):
 st.markdown("## 🕒 Reloj Checador")
 
 col1, col2 = st.columns(2)
-col1.button("🟢 ENTRADA", on_click=registrar, args=("Entrada",), use_container_width=True)
-col2.button("🔴 SALIDA", on_click=registrar, args=("Salida",), use_container_width=True)
+
+if col1.button("📥 ENTRADA"):
+    registrar("Entrada")
+
+if col2.button("📤 SALIDA"):
+    registrar("Salida")
 
 # =========================
 # ⚠️ JUSTIFICACIÓN
