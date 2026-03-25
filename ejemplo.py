@@ -149,23 +149,23 @@ def registrar(tipo):
             est = "SALIDA ANTICIPADA"
     
     try:
-    response = supabase.table("registros").insert({
-        "empleado": user['nombre'],
-        "fecha_hora": ahora.strftime("%Y-%m-%d %H:%M:%S"),
-        "lat": lat,
-        "lon": lon,
-        "tipo": tipo,
-        "estatus": est,
-        "min_retardo": min_r,
-        "sucursal_id": user['sucursal_id'],
-        "justificacion": ""
-    }).execute()
+        response = supabase.table("registros").insert({
+            "empleado": user['nombre'],
+            "fecha_hora": ahora.strftime("%Y-%m-%d %H:%M:%S"),
+            "lat": lat,
+            "lon": lon,
+            "tipo": tipo,
+            "estatus": est,
+            "min_retardo": min_r,
+            "sucursal_id": user['sucursal_id'],
+            "justificacion": ""
+        }).execute()
 
-    st.success("✅ REGISTRO GUARDADO")
-    st.write(response)
+        st.success("✅ REGISTRO GUARDADO")
+        st.write(response)
 
-except Exception as e:
-    st.error(f"❌ ERROR REAL: {e}")
+    except Exception as e:
+        st.error(f"❌ ERROR REAL: {e}")
 
     if est != "A Tiempo":
         st.session_state.justificar = True
