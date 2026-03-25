@@ -172,9 +172,9 @@ def registrar(tipo):
         st.session_state.procesando = False
         st.rerun()
 
-    if est != "A Tiempo":
-        st.session_state.justificar = True
-        st.session_state.hora_registro = ahora.strftime("%Y-%m-%d %H:%M:%S")
+        if est != "A Tiempo":
+            st.session_state.justificar = True
+            st.session_state.hora_registro = ahora.strftime("%Y-%m-%d %H:%M:%S")
 
     st.rerun()
 
