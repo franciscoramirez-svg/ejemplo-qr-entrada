@@ -111,6 +111,8 @@ def registrar(tipo):
     if not ok:
         st.error(ubic)
         return
+        
+    st.write("DEBUG UBICACIÓN:", ubic)    
 
     lat, lon = ubic
 
