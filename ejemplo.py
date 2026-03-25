@@ -86,16 +86,25 @@ user = st.session_state.user
 st.title("🏢 NEOMOTIC Access PRO")
 st.success(f"👤 {user['nombre']} | {user.get('rol','empleado')}")
 
-colA, colB = st.columns(2)
+# =========================
+# 🖥️ CONTROL KIOSCO (MEJORADO)
+# =========================
+if user.get("rol") == "admin":
 
-if colA.button("🚪 Cerrar sesión"):
+    col1, col2 = st.columns(2)
+
+    if col1.button("🖥️ Activar Kiosco"):
+        st.session_state.modo_kiosco = True
+
+    if col2.button("❌ Salir Kiosco"):
+        st.session_state.modo_kiosco = False
+
+# =========================
+# 🚪 LOGOUT
+# =========================
+if st.button("🚪 Cerrar sesión"):
     st.session_state.user = None
     st.rerun()
-
-if user.get("rol") == "admin":
-    if colB.button("🖥️ Modo Kiosco"):
-        st.session_state.modo_kiosco = not st.session_state.modo_kiosco
-        st.rerun()
 
 # =========================
 # 📍 REGISTRO
@@ -145,11 +154,12 @@ def registrar(tipo):
         st.session_state.hora_registro = ahora.strftime("%Y-%m-%d %H:%M:%S")
 
 # =========================
-# 🖥️ MODO KIOSCO
+# 🖥️ MODO KIOSCO (LIMPIO)
 # =========================
 if st.session_state.modo_kiosco:
 
-    st.markdown("## 🕒 RELOJ CHECADOR")
+    st.markdown("# 🏢 RELOJ CHECADOR")
+    st.markdown("## Presiona para registrar")
 
     c1, c2 = st.columns(2)
 
@@ -159,44 +169,45 @@ if st.session_state.modo_kiosco:
     if c2.button("📤 SALIDA", use_container_width=True):
         registrar("Salida")
 
+    st.stop()  # 🔥 BLOQUEA TODO LO DEMÁS
+
 # =========================
 # 🧾 MODO NORMAL
 # =========================
-else:
+st.markdown("## 🕒 Registro")
 
-    st.markdown("## 🕒 Registro")
+c1, c2 = st.columns(2)
 
-    c1, c2 = st.columns(2)
+if c1.button("📥 ENTRADA"):
+    registrar("Entrada")
 
-    if c1.button("📥 ENTRADA"):
-        registrar("Entrada")
+if c2.button("📤 SALIDA"):
+    registrar("Salida")
 
-    if c2.button("📤 SALIDA"):
-        registrar("Salida")
+# =========================
+# ⚠️ JUSTIFICACIÓN
+# =========================
+if st.session_state.justificar:
 
-    # =========================
-    # ⚠️ JUSTIFICACIÓN
-    # =========================
-    if st.session_state.justificar:
-        st.divider()
+    st.divider()
 
-        with st.form("just"):
-            motivo = st.text_area("Justificación requerida")
+    with st.form("just"):
+        motivo = st.text_area("Justificación requerida")
 
-            if st.form_submit_button("Guardar"):
-                if len(motivo) > 4:
+        if st.form_submit_button("Guardar"):
+            if len(motivo) > 4:
 
-                    supabase.table("registros").update({
-                        "justificacion": motivo
-                    }).eq("empleado", user['nombre'])\
-                      .eq("fecha_hora", st.session_state.hora_registro)\
-                      .execute()
+                supabase.table("registros").update({
+                    "justificacion": motivo
+                }).eq("empleado", user['nombre'])\
+                  .eq("fecha_hora", st.session_state.hora_registro)\
+                  .execute()
 
-                    st.success("✅ Guardado")
-                    st.session_state.justificar = False
+                st.success("✅ Guardado")
+                st.session_state.justificar = False
 
-                else:
-                    st.error("Escribe más detalle")
+            else:
+                st.error("Escribe más detalle")
 
 # =========================
 # 📜 SOLO ADMIN
@@ -213,16 +224,13 @@ if user.get("rol") == "admin":
         df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
         hoy = df[df['fecha_hora'].dt.date == datetime.now().date()]
 
-        # KPIs
         c1, c2, c3 = st.columns(3)
         c1.metric("Registros hoy", len(hoy))
         c2.metric("Retardos", len(hoy[hoy['estatus'].str.contains("Retardo")]))
         c3.metric("Salidas anticipadas", len(hoy[hoy['estatus']=="SALIDA ANTICIPADA"]))
 
-        # Tabla
         st.dataframe(hoy)
 
-        # Faltantes
         empleados = obtener_empleados()
         presentes = hoy['empleado'].unique()
         faltantes = [e['nombre'] for e in empleados if e['nombre'] not in presentes]
@@ -231,19 +239,17 @@ if user.get("rol") == "admin":
         for f in faltantes:
             st.error(f)
 
-        # Ranking
         st.subheader("🏆 Ranking")
         ranking = df.groupby("empleado")['min_retardo'].sum().sort_values()
         st.bar_chart(ranking)
 
-        # Mapa
         st.subheader("🗺️ Ubicaciones")
         pts = hoy.dropna(subset=['lat', 'lon'])
         if not pts.empty:
             st.map(pts)
 
     # =========================
-    # 📦 QR MASIVO ZIP
+    # 📦 QR ZIP
     # =========================
     st.subheader("📦 QR empleados")
 
@@ -262,7 +268,7 @@ if user.get("rol") == "admin":
         st.download_button("Descargar ZIP", zip_buffer.getvalue(), "QR_empleados.zip")
 
     # =========================
-    # 🏢 MULTI SUCURSAL
+    # 🏢 SUCURSALES
     # =========================
     st.subheader("🏢 Sucursales")
 
