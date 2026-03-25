@@ -176,7 +176,7 @@ def registrar(tipo):
             st.session_state.justificar = True
             st.session_state.hora_registro = ahora.strftime("%Y-%m-%d %H:%M:%S")
 
-    st.rerun()
+            st.rerun()
 
 st.markdown("## 🕒 Reloj Checador")
 
