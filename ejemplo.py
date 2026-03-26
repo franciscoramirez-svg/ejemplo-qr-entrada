@@ -112,7 +112,8 @@ def validar_flujo(nombre, tipo):
     if df.empty:
         return True, ""
 
-    df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
+    df['fecha_hora'] = pd.to_datetime(df['fecha_hora'], errors='coerce')
+    df = df.dropna(subset=['fecha_hora'])
 
     hoy = date.today()
     ayer = hoy - timedelta(days=1)
@@ -273,3 +274,62 @@ if st.session_state.justificar:
 
             else:
                 st.error("Escribe más detalle")
+
+# =========================
+# 📊 ADMIN PANEL (FIX FINAL)
+# =========================
+if user.get("rol") == "admin":
+
+    st.divider()
+    st.subheader("📊 Dashboard Ejecutivo")
+
+    df = obtener_registros()
+
+    if not df.empty:
+
+        # 🔥 FIX FECHAS
+        df['fecha_hora'] = pd.to_datetime(df['fecha_hora'], errors='coerce')
+        df = df.dropna(subset=['fecha_hora'])
+
+        hoy = df[df['fecha_hora'].dt.date == datetime.now().date()]
+
+        # =========================
+        # KPIs
+        # =========================
+        c1, c2, c3 = st.columns(3)
+
+        c1.metric("Registros hoy", len(hoy))
+        c2.metric("Retardos", len(hoy[hoy['estatus'].str.contains("Retardo", na=False)]))
+        c3.metric("Salidas anticipadas", len(hoy[hoy['estatus']=="SALIDA ANTICIPADA"]))
+
+        # =========================
+        # TABLA
+        # =========================
+        st.dataframe(hoy.sort_values("fecha_hora", ascending=False))
+
+        # =========================
+        # GRÁFICA
+        # =========================
+        st.subheader("📈 Tendencia")
+        df['dia'] = df['fecha_hora'].dt.date
+        st.line_chart(df.groupby('dia').size())
+
+        # =========================
+        # MAPA
+        # =========================
+        st.subheader("🗺️ Ubicaciones")
+        pts = hoy.dropna(subset=['lat','lon'])
+        if not pts.empty:
+            st.map(pts)
+
+        # =========================
+        # FALTANTES
+        # =========================
+        empleados = obtener_empleados()
+        presentes = hoy['empleado'].unique()
+
+        faltantes = [e['nombre'] for e in empleados if e['nombre'] not in presentes]
+
+        st.subheader("🚫 Faltantes")
+        for f in faltantes:
+            st.error(f)
