@@ -87,6 +87,9 @@ if not st.session_state.user:
 # 👤 USER
 # =========================
 user = st.session_state.user
+# 🔥 FIX: ADMIN NO SE BLOQUEA
+    if user.get("rol") == "admin":
+        st.session_state.registro_ok = False
 st.title("🏢 NEOMOTIC Access PRO")
 st.success(f"👤 {user['nombre']} | {user.get('rol','empleado')}")
 
@@ -229,9 +232,13 @@ if st.session_state.modo_kiosco:
 # =========================
 # 🧾 NORMAL
 # =========================
+# =========================
+# 🧾 NORMAL
+# =========================
 st.markdown("## 🕒 Reloj Checador")
 
-if st.session_state.registro_ok:
+# 🔒 SOLO BLOQUEA A EMPLEADOS
+if user.get("rol") != "admin" and st.session_state.registro_ok:
 
     st.success(f"✅ {st.session_state.ultimo_movimiento}")
     st.info("✔ Registro guardado correctamente")
