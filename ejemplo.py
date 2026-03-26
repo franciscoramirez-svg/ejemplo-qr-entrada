@@ -23,6 +23,10 @@ zona = pytz.timezone('America/Mexico_City')
 HORA_ENTRADA = "07:00:00"
 HORA_SALIDA = "17:00:00"
 
+# 🔐 ROLES PRO
+ROLES_KIOSCO = ["admin", "Supervisor OP", "Supervisor Seguridad"]
+ROLES_ADMIN = ["admin"]
+
 # =========================
 # 🧠 FUNCIONES
 # =========================
@@ -32,9 +36,6 @@ def obtener_registros():
 def obtener_empleados():
     return supabase.table("empleados").select("*").execute().data
 
-def obtener_sucursales():
-    return supabase.table("sucursales").select("*").execute().data
-
 # =========================
 # 🔐 SESSION
 # =========================
@@ -42,8 +43,6 @@ if 'user' not in st.session_state:
     st.session_state.user = None
 if 'justificar' not in st.session_state:
     st.session_state.justificar = False
-if 'hora_registro' not in st.session_state:
-    st.session_state.hora_registro = ""
 if 'registro_id' not in st.session_state:
     st.session_state.registro_id = None
 if 'modo_kiosco' not in st.session_state:
@@ -85,6 +84,11 @@ if not st.session_state.user:
 # 👤 USER
 # =========================
 user = st.session_state.user
+
+# 🔥 FIX ADMIN NO BLOQUEADO
+if user.get("rol") in ROLES_ADMIN:
+    st.session_state.registro_ok = False
+
 st.title("🏢 NEOMOTIC Access PRO")
 st.success(f"👤 {user['nombre']} | {user.get('rol','empleado')}")
 
@@ -95,12 +99,20 @@ if st.button("🚪 Cerrar sesión"):
     st.session_state.user = None
     st.rerun()
 
-if user.get("rol") == "admin":
+# 🖥️ CONTROL KIOSCO (MULTI-ROL)
+if user.get("rol") in ROLES_KIOSCO:
+    st.divider()
+    st.subheader("🖥️ Modo Kiosco")
+
     col1, col2 = st.columns(2)
-    if col1.button("🖥️ Activar Kiosco"):
+
+    if col1.button("🟢 Activar"):
         st.session_state.modo_kiosco = True
-    if col2.button("❌ Salir Kiosco"):
+        st.rerun()
+
+    if col2.button("🔴 Salir"):
         st.session_state.modo_kiosco = False
+        st.rerun()
 
 # =========================
 # 🧠 VALIDACIONES
@@ -181,36 +193,30 @@ def registrar(nombre, tipo):
             "horas_extra": False
         }).execute()
 
-        # ✅ GUARDAR ID
         st.session_state.registro_id = response.data[0]['id']
-
-        # ✅ CONTROL PRO
         st.session_state.registro_ok = True
         st.session_state.ultimo_movimiento = f"{tipo} registrada"
 
         if est != "A Tiempo":
             st.session_state.justificar = True
 
-        st.toast(f"{tipo} registrada correctamente", icon="✅")
+        st.toast(f"{tipo} registrada", icon="✅")
         st.rerun()
 
     except Exception as e:
-        st.error(f"❌ Error real: {e}")
-
+        st.error(f"❌ Error: {e}")
 
 # =========================
-# 🖥️ KIOSCO QR (FIX PRO)
+# 🖥️ KIOSCO QR
 # =========================
-if st.session_state.modo_kiosco:
+if st.session_state.modo_kiosco and user.get("rol") in ROLES_KIOSCO:
 
     st.markdown("# 🏢 RELOJ CHECADOR QR")
 
-    # 🧠 RESET AUTOMÁTICO
     if st.session_state.registro_ok:
 
         st.success(f"✅ {st.session_state.ultimo_movimiento}")
 
-        # ⏱️ esperar 2 segundos y limpiar
         import time
         time.sleep(2)
 
@@ -219,9 +225,6 @@ if st.session_state.modo_kiosco:
 
         st.rerun()
 
-    # =========================
-    # ESCANEO QR
-    # =========================
     foto = st.camera_input("📷 Escanea QR")
 
     if foto:
@@ -246,12 +249,8 @@ if st.session_state.modo_kiosco:
 # =========================
 st.markdown("## 🕒 Reloj Checador")
 
-# SOLO BLOQUEA EMPLEADOS
-if st.session_state.registro_ok and user.get("rol") != "admin":
-
+if st.session_state.registro_ok and user.get("rol") not in ROLES_ADMIN:
     st.success(f"✅ {st.session_state.ultimo_movimiento}")
-    st.info("✔ Registro guardado correctamente")
-
 else:
     c1, c2 = st.columns(2)
 
@@ -278,8 +277,7 @@ if st.session_state.justificar:
 
                 supabase.table("registros").update({
                     "justificacion": motivo
-                }).eq("id", st.session_state.registro_id)\
-                  .execute()
+                }).eq("id", st.session_state.registro_id).execute()
 
                 st.success("✅ Justificación guardada")
 
@@ -291,9 +289,9 @@ if st.session_state.justificar:
                 st.error("Escribe más detalle")
 
 # =========================
-# 📊 ADMIN PANEL (FIX FINAL)
+# 📊 DASHBOARD SOLO ADMIN
 # =========================
-if user.get("rol") == "admin":
+if user.get("rol") in ROLES_ADMIN:
 
     st.divider()
     st.subheader("📊 Dashboard Ejecutivo")
@@ -302,44 +300,27 @@ if user.get("rol") == "admin":
 
     if not df.empty:
 
-        # 🔥 FIX FECHAS
         df['fecha_hora'] = pd.to_datetime(df['fecha_hora'], errors='coerce')
         df = df.dropna(subset=['fecha_hora'])
 
         hoy = df[df['fecha_hora'].dt.date == datetime.now().date()]
 
-        # =========================
-        # KPIs
-        # =========================
         c1, c2, c3 = st.columns(3)
-
         c1.metric("Registros hoy", len(hoy))
         c2.metric("Retardos", len(hoy[hoy['estatus'].str.contains("Retardo", na=False)]))
         c3.metric("Salidas anticipadas", len(hoy[hoy['estatus']=="SALIDA ANTICIPADA"]))
 
-        # =========================
-        # TABLA
-        # =========================
         st.dataframe(hoy.sort_values("fecha_hora", ascending=False))
 
-        # =========================
-        # GRÁFICA
-        # =========================
         st.subheader("📈 Tendencia")
         df['dia'] = df['fecha_hora'].dt.date
         st.line_chart(df.groupby('dia').size())
 
-        # =========================
-        # MAPA
-        # =========================
         st.subheader("🗺️ Ubicaciones")
         pts = hoy.dropna(subset=['lat','lon'])
         if not pts.empty:
             st.map(pts)
 
-        # =========================
-        # FALTANTES
-        # =========================
         empleados = obtener_empleados()
         presentes = hoy['empleado'].unique()
 
