@@ -88,7 +88,7 @@ if not st.session_state.user:
 # =========================
 user = st.session_state.user
 # 🔥 FIX: ADMIN NO SE BLOQUEA
-    if user.get("rol") == "admin":
+if user.get("rol") == "admin":
         st.session_state.registro_ok = False
 st.title("🏢 NEOMOTIC Access PRO")
 st.success(f"👤 {user['nombre']} | {user.get('rol','empleado')}")
