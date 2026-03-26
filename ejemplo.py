@@ -329,3 +329,65 @@ if user.get("rol") in ROLES_ADMIN:
         st.subheader("🚫 Faltantes")
         for f in faltantes:
             st.error(f)
+            
+# =========================
+# 📦 GENERAR QR MASIVO (ADMIN)
+# =========================
+st.divider()
+st.subheader("📦 Generar QR de empleados")
+
+empleados = obtener_empleados()
+
+if empleados:
+
+    nombres_emp = [e['nombre'] for e in empleados]
+
+    st.info(f"Total empleados: {len(nombres_emp)}")
+
+    col1, col2 = st.columns(2)
+
+    # =========================
+    # 🔹 DESCARGAR TODOS (ZIP)
+    # =========================
+    if col1.button("📦 Descargar todos los QR (ZIP)"):
+
+        zip_buffer = BytesIO()
+
+        with zipfile.ZipFile(zip_buffer, "w") as z:
+            for emp in empleados:
+                qr = qrcode.make(emp['nombre'])
+
+                img_bytes = BytesIO()
+                qr.save(img_bytes, format='PNG')
+
+                z.writestr(f"{emp['nombre']}.png", img_bytes.getvalue())
+
+        st.download_button(
+            "⬇️ Descargar ZIP",
+            zip_buffer.getvalue(),
+            file_name="QR_Empleados.zip",
+            mime="application/zip"
+        )
+
+    # =========================
+    # 🔹 QR INDIVIDUAL
+    # =========================
+    emp_sel = col2.selectbox("Selecciona empleado", nombres_emp)
+
+    if emp_sel:
+        qr = qrcode.make(emp_sel)
+        st.image(qr, caption=f"QR de {emp_sel}")
+
+        img_bytes = BytesIO()
+        qr.save(img_bytes, format='PNG')
+
+        st.download_button(
+            "⬇️ Descargar QR individual",
+            img_bytes.getvalue(),
+            file_name=f"{emp_sel}.png",
+            mime="image/png"
+        )
+
+else:
+    st.warning("No hay empleados registrados")
+
