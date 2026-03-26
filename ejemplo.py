@@ -44,12 +44,10 @@ if 'justificar' not in st.session_state:
     st.session_state.justificar = False
 if 'hora_registro' not in st.session_state:
     st.session_state.hora_registro = ""
+if 'registro_id' not in st.session_state:
+    st.session_state.registro_id = None
 if 'modo_kiosco' not in st.session_state:
     st.session_state.modo_kiosco = False
-if 'pendiente' not in st.session_state:
-    st.session_state.pendiente = False
-
-# 🔥 NUEVOS ESTADOS PRO
 if 'registro_ok' not in st.session_state:
     st.session_state.registro_ok = False
 if 'ultimo_movimiento' not in st.session_state:
@@ -87,9 +85,6 @@ if not st.session_state.user:
 # 👤 USER
 # =========================
 user = st.session_state.user
-# 🔥 FIX: ADMIN NO SE BLOQUEA
-if user.get("rol") == "admin":
-        st.session_state.registro_ok = False
 st.title("🏢 NEOMOTIC Access PRO")
 st.success(f"👤 {user['nombre']} | {user.get('rol','empleado')}")
 
@@ -132,7 +127,6 @@ def validar_flujo(nombre, tipo):
 
         if any(ayer_regs['tipo'] == "Entrada") and not any(ayer_regs['tipo'] == "Salida"):
             st.session_state.justificar = True
-            st.session_state.pendiente = True
             return False, "⚠️ Debes justificar falta de salida de ayer"
 
     return True, ""
@@ -141,6 +135,9 @@ def validar_flujo(nombre, tipo):
 # 📍 REGISTRAR
 # =========================
 def registrar(nombre, tipo):
+
+    if st.session_state.registro_ok:
+        return
 
     ok, msg = validar_flujo(nombre, tipo)
 
@@ -170,7 +167,7 @@ def registrar(nombre, tipo):
             est = "SALIDA ANTICIPADA"
 
     try:
-        supabase.table("registros").insert({
+        response = supabase.table("registros").insert({
             "empleado": nombre,
             "fecha_hora": ahora.isoformat(),
             "lat": 19.24,
@@ -183,14 +180,17 @@ def registrar(nombre, tipo):
             "horas_extra": False
         }).execute()
 
+        # ✅ GUARDAR ID
+        st.session_state.registro_id = response.data[0]['id']
+
         # ✅ CONTROL PRO
         st.session_state.registro_ok = True
         st.session_state.ultimo_movimiento = f"{tipo} registrada"
 
         if est != "A Tiempo":
             st.session_state.justificar = True
-            st.session_state.hora_registro = ahora.isoformat()
 
+        st.toast(f"{tipo} registrada correctamente", icon="✅")
         st.rerun()
 
     except Exception as e:
@@ -205,10 +205,6 @@ if st.session_state.modo_kiosco:
 
     if st.session_state.registro_ok:
         st.success(f"✅ {st.session_state.ultimo_movimiento}")
-
-        if st.button("🔄 Nuevo registro kiosco"):
-            st.session_state.registro_ok = False
-            st.rerun()
 
     else:
         foto = st.camera_input("📷 Escanea QR")
@@ -232,22 +228,13 @@ if st.session_state.modo_kiosco:
 # =========================
 # 🧾 NORMAL
 # =========================
-# =========================
-# 🧾 NORMAL
-# =========================
 st.markdown("## 🕒 Reloj Checador")
 
-# 🔒 SOLO BLOQUEA A EMPLEADOS
-if user.get("rol") != "admin" and st.session_state.registro_ok:
+# SOLO BLOQUEA EMPLEADOS
+if st.session_state.registro_ok and user.get("rol") != "admin":
 
     st.success(f"✅ {st.session_state.ultimo_movimiento}")
     st.info("✔ Registro guardado correctamente")
-
-    if st.button("🔄 Nuevo registro"):
-        st.session_state.registro_ok = False
-        st.session_state.justificar = False
-        st.session_state.ultimo_movimiento = ""
-        st.rerun()
 
 else:
     c1, c2 = st.columns(2)
@@ -275,13 +262,13 @@ if st.session_state.justificar:
 
                 supabase.table("registros").update({
                     "justificacion": motivo
-                }).eq("empleado", user['nombre'])\
-                  .eq("fecha_hora", st.session_state.hora_registro)\
+                }).eq("id", st.session_state.registro_id)\
                   .execute()
 
                 st.success("✅ Justificación guardada")
 
                 st.session_state.justificar = False
+                st.session_state.registro_ok = False
                 st.rerun()
 
             else:
