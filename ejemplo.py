@@ -376,10 +376,15 @@ if empleados:
 
     if emp_sel:
         qr = qrcode.make(emp_sel)
-        st.image(qr, caption=f"QR de {emp_sel}")
+        img_bytes = BytesIO()
+        qr.save(img_bytes, format='PNG')
+        img_bytes.seek(0)
+
+        st.image(img_bytes, caption=f"QR de {emp_sel}")
 
         img_bytes = BytesIO()
         qr.save(img_bytes, format='PNG')
+        img_bytes.seek(0)
 
         st.download_button(
             "⬇️ Descargar QR individual",
