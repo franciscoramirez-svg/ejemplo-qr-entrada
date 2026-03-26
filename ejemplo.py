@@ -197,32 +197,47 @@ def registrar(nombre, tipo):
     except Exception as e:
         st.error(f"❌ Error real: {e}")
 
+
 # =========================
-# 🖥️ KIOSCO QR
+# 🖥️ KIOSCO QR (FIX PRO)
 # =========================
 if st.session_state.modo_kiosco:
 
     st.markdown("# 🏢 RELOJ CHECADOR QR")
 
+    # 🧠 RESET AUTOMÁTICO
     if st.session_state.registro_ok:
+
         st.success(f"✅ {st.session_state.ultimo_movimiento}")
 
-    else:
-        foto = st.camera_input("📷 Escanea QR")
+        # ⏱️ esperar 2 segundos y limpiar
+        import time
+        time.sleep(2)
 
-        if foto:
-            img = cv2.imdecode(np.asarray(bytearray(foto.getvalue()), dtype=np.uint8), 1)
-            data, _, _ = cv2.QRCodeDetector().detectAndDecode(img)
+        st.session_state.registro_ok = False
+        st.session_state.ultimo_movimiento = ""
 
-            if data:
-                st.success(f"👤 {data}")
+        st.rerun()
 
-                c1, c2 = st.columns(2)
-                if c1.button("📥 ENTRADA"):
-                    registrar(data, "Entrada")
+    # =========================
+    # ESCANEO QR
+    # =========================
+    foto = st.camera_input("📷 Escanea QR")
 
-                if c2.button("📤 SALIDA"):
-                    registrar(data, "Salida")
+    if foto:
+        img = cv2.imdecode(np.asarray(bytearray(foto.getvalue()), dtype=np.uint8), 1)
+        data, _, _ = cv2.QRCodeDetector().detectAndDecode(img)
+
+        if data:
+            st.success(f"👤 {data}")
+
+            c1, c2 = st.columns(2)
+
+            if c1.button("📥 ENTRADA"):
+                registrar(data, "Entrada")
+
+            if c2.button("📤 SALIDA"):
+                registrar(data, "Salida")
 
     st.stop()
 
