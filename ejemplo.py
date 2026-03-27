@@ -27,6 +27,9 @@ ROLES_ADMIN = ["admin"]
 
 st.set_page_config(layout="wide", page_title="NEOMOTIC Access PRO")
 
+# 🛰️ CAPTURA DE GPS GLOBAL (Para evitar el error de Duplicate Key)
+loc_global = get_geolocation()
+
 # 🛰️ CAPTURA DE GPS GLOBAL (Evita bucles infinitos)
 if 'location' not in st.session_state:
     st.session_state.location = None
@@ -83,47 +86,33 @@ def registrar(nombre, tipo):
 
     st.subheader(f"📍 Registro de {tipo}")
     
-    # 🛰️ PASO 1: CAPTURA DE GPS (Sin el argumento 'key' que causaba el error)
-    loc = get_geolocation()
-
-    if not loc:
-        st.warning("⚠️ **Buscando señal GPS...**")
-        st.info("Si no aparece el aviso, haz clic en el **candado 🔒** de la URL y permite la ubicación.")
-        if st.button("🔄 REINTENTAR LECTURA"): 
-            st.rerun()
+    # Usamos la variable global loc_global
+    if not loc_global:
+        st.warning("📡 Buscando señal GPS... Por favor permite el acceso en el candado 🔒 y espera un momento.")
         return
 
-    # 🛠️ PASO 2: EXTRAER COORDENADAS
     try:
-        lat = loc['coords']['latitude']
-        lon = loc['coords']['longitude']
+        lat = loc_global['coords']['latitude']
+        lon = loc_global['coords']['longitude']
         st.success(f"✅ Ubicación detectada: {lat:.5f}, {lon:.5f}")
-    except (KeyError, TypeError):
-        st.error("❌ Error al leer el sensor. Intenta refrescar la página.")
-        return
+    except:
+        st.error("❌ Error al leer el sensor."); return
 
-    # --- 🗺️ VALIDACIÓN DE DISTANCIA (Corregido para evitar errores de lista) ---
+    # --- VALIDACIÓN DE DISTANCIA ---
     res_suc = supabase.table("sucursales").select("*").eq("id", st.session_state.user['sucursal_id']).execute()
-    
     if res_suc.data:
-        # Importante: res.data es una lista, tomamos el primer elemento [0]
-        s = res_suc.data[0] 
+        s = res_suc.data[0]
         dist = distancia_metros(lat, lon, s['lat'], s['lon'])
         radio_p = s.get("radio", 1000)
 
         if dist > radio_p:
-            st.error(f"❌ FUERA DE RANGO: Estás a {dist:.0f}m.")
+            st.error(f"❌ FUERA DE RANGO ({dist:.0f}m)")
             if st.session_state.user.get('rol') in ROLES_ADMIN:
-                if not st.checkbox("🔓 OMITIR GEOCERCA (ADMIN)"): 
-                    return
-            else: 
-                return
-    else:
-        st.error("Sucursal no configurada en la base de datos.")
-        return
+                if not st.checkbox("🔓 OMITIR GEOCERCA (ADMIN)"): return
+            else: return
 
-    # --- 🚀 PASO 3: BOTÓN FINAL DE GUARDADO ---
-    if st.button(f"CONFIRMAR {tipo.upper()}", use_container_width=True):
+    # --- BOTÓN DE GUARDADO ---
+    if st.button(f"🚀 CONFIRMAR {tipo.upper()}", use_container_width=True):
         ahora = datetime.now(zona)
         est, min_r = "A Tiempo", 0
         h_lim = datetime.strptime(HORA_ENTRADA, "%H:%M:%S").time()
@@ -134,8 +123,7 @@ def registrar(nombre, tipo):
             if min_r > 30: est = "RETARDO CRÍTICO"
             elif min_r > 15: est = "Retardo"
         elif tipo == "Salida":
-            if ahora.time() < datetime.strptime(HORA_SALIDA, "%H:%M:%S").time(): 
-                est = "SALIDA ANTICIPADA"
+            if ahora.time() < datetime.strptime(HORA_SALIDA, "%H:%M:%S").time(): est = "SALIDA ANTICIPADA"
 
         try:
             data_ins = {
@@ -148,12 +136,10 @@ def registrar(nombre, tipo):
                 st.session_state.registro_id = res.data[0]['id']
                 st.session_state.registro_ok = True
                 st.session_state.ultimo_movimiento = f"{tipo} registrada ✅"
-                if est != "A Tiempo": 
-                    st.session_state.justificar = True
-                st.balloons()
+                if est != "A Tiempo": st.session_state.justificar = True
                 st.rerun()
         except Exception as e:
-            st.error(f"❌ Error al guardar: {e}")
+            st.error(f"❌ Error: {e}")
 
 # =========================
 # 🔐 LOGIN & SESSION
