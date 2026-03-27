@@ -84,9 +84,6 @@ def exportar_excel(df):
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-           st.subheader("🧾 Exportar datos")
-           exportar_excel(df)
-
 # =========================
 # 📧 EMAIL
 # =========================
@@ -271,8 +268,8 @@ def registrar(nombre, tipo):
         response = supabase.table("registros").insert({
             "empleado": nombre,
             "fecha_hora": ahora.isoformat(),
-            "lat": 19.24,
-            "lon": -96.17,
+            "lat": lat,
+            "lon": lon,
             "tipo": tipo,
             "estatus": est,
             "min_retardo": min_r,
@@ -428,6 +425,11 @@ if user.get("rol") in ROLES_ADMIN:
         for f in faltantes:
             st.error(f)
 
+    # =========================
+    # 🧾 EXPORTAR
+    # =========================
+    st.subheader("🧾 Exportar datos")
+    exportar_excel(df)
 
 # =========================
 # 📦 GENERAR QR MASIVO (ADMIN)
