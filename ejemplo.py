@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 from math import radians, cos, sin, asin, sqrt
 from streamlit_geolocation import streamlit_geolocation
+from streamlit_js_eval import get_geolocation
 
 # =========================
 # 🔌 SUPABASE & CONFIG
