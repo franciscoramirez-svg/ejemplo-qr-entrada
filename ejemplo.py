@@ -82,27 +82,28 @@ def validar_flujo(nombre, tipo):
 # 📍 REGISTRAR 
 # =========================
 def registrar(nombre, tipo):
-    if st.session_state.get('registro_ok'): 
-        return
+    if st.session_state.get('registro_ok'): return
 
     st.subheader(f"📍 Registro de {tipo}")
     
-    # Usamos la variable global loc_global
-    if not loc_global:
-        st.warning("📡 Buscando señal GPS... Por favor permite el acceso en el candado 🔒 y espera un momento.")
+    # Usamos la captura global
+    if not loc_data:
+        st.warning("📡 Buscando señal GPS... Permite el acceso en el candado 🔒 y espera un momento.")
+        if st.button("🔄 Forzar actualización GPS"): st.rerun()
         return
 
     try:
-        lat = loc_global['coords']['latitude']
-        lon = loc_global['coords']['longitude']
+        lat = loc_data['coords']['latitude']
+        lon = loc_data['coords']['longitude']
         st.success(f"✅ Ubicación detectada: {lat:.5f}, {lon:.5f}")
     except:
-        st.error("❌ Error al leer el sensor."); return
+        st.error("❌ Error al leer coordenadas."); return
 
     # --- VALIDACIÓN DE DISTANCIA ---
     res_suc = supabase.table("sucursales").select("*").eq("id", st.session_state.user['sucursal_id']).execute()
     if res_suc.data:
-        s = res_suc.data[0]
+        # CORRECCIÓN: Accedemos al primer elemento [0]
+        s = res_suc.data[0] 
         dist = distancia_metros(lat, lon, s['lat'], s['lon'])
         radio_p = s.get("radio", 1000)
 
@@ -141,6 +142,7 @@ def registrar(nombre, tipo):
                 st.rerun()
         except Exception as e:
             st.error(f"❌ Error: {e}")
+
 
 
 # =========================
