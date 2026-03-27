@@ -249,15 +249,27 @@ if user.get("rol") in ROLES_ADMIN:
         st.write(f"📋 **Detalle del periodo: {rango}**")
         st.dataframe(df_rep[["empleado", "fecha_hora", "tipo", "estatus", "min_retardo", "justificacion"]].sort_values("fecha_hora", ascending=False), use_container_width=True)
         
-        # 📥 Botón de Exportar con Nombre Dinámico
+        # 📥 BOTÓN DE EXPORTAR (CORREGIDO PARA EXCEL)
         output = BytesIO()
-        df_rep.to_excel(output, index=False)
+        
+        # Hacemos una copia para no afectar la visualización en la app
+        df_para_excel = df_rep.copy()
+
+        # Quitar la zona horaria de TODAS las columnas de fecha para que Excel no falle
+        for col in df_para_excel.select_dtypes(include=['datetime64[ns, America/Mexico_City]', 'datetimetz']).columns:
+            df_para_excel[col] = df_para_excel[col].dt.tz_localize(None)
+
+        # Generar el archivo
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df_para_excel.to_excel(writer, index=False, sheet_name='Reporte')
+        
         st.download_button(
             label=f"📥 Descargar Reporte ({rango})",
             data=output.getvalue(),
             file_name=f"reporte_{rango.replace(' ', '_').lower()}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
     else:
         st.info(f"No hay registros encontrados para el periodo: {rango}")
 
