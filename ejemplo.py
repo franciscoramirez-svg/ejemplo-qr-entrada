@@ -80,10 +80,13 @@ def registrar(nombre, tipo):
         st.error(msg)
         return
 
-    # OBTENER GPS REAL
+    # 📡 GPS REAL (Llamativo y con Reintento)
     loc = get_geolocation()
     if not loc:
-        st.warning("📍 Esperando GPS... Asegúrate de permitir la ubicación en el navegador.")
+        st.error("🚨 **ERROR DE UBICACIÓN**")
+        st.warning("Por favor, **activa el GPS** de tu celular y **permite el acceso** en el navegador.")
+        if st.button("🔄 REINTENTAR LECTURA GPS"):
+            st.rerun()
         return
     
     lat, lon = loc['coords']['latitude'], loc['coords']['longitude']
