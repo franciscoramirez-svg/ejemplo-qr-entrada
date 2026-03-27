@@ -198,35 +198,66 @@ if st.session_state.justificar and st.session_state.registro_id:
             else: st.warning("Por favor detalla más.")
 
 # =========================
-# 📊 DASHBOARD ADMIN
+# 📊 DASHBOARD ADMIN (FILTRADO DINÁMICO)
 # =========================
 if user.get("rol") in ROLES_ADMIN:
     st.divider()
-    df_hoy = obtener_registros_hoy()
-    if not df_hoy.empty:
-        st.subheader("📊 Resumen de Hoy")
-        df_hoy['fecha_hora'] = pd.to_datetime(df_hoy['fecha_hora']).dt.tz_localize('UTC').dt.tz_convert('America/Mexico_City')
-        
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Total", len(df_hoy))
-        c2.metric("Retardos", len(df_hoy[df_hoy['estatus'].str.contains("Retardo|RETARDO", na=False)]))
-        c3.metric("Salidas Ant.", len(df_hoy[df_hoy['estatus']=="SALIDA ANTICIPADA"]))
-        
-        st.dataframe(df_hoy[["empleado", "fecha_hora", "tipo", "estatus", "justificacion"]].sort_values("fecha_hora", ascending=False))
-        
-        if st.button("📥 Exportar Reporte de Hoy"):
-            output = BytesIO()
-            df_hoy.to_excel(output, index=False)
-            st.download_button("Descargar Excel", output.getvalue(), "asistencia.xlsx")
+    st.subheader("📊 Panel de Control Administrativo")
 
-    # GENERADOR QR
-    st.divider()
-    st.subheader("📦 Herramientas QR")
-    emps = obtener_empleados()
-    sel_emp = st.selectbox("Empleado para QR", [e['nombre'] for e in emps])
-    if sel_emp:
-        img_qr = qrcode.make(sel_emp)
-        buf = BytesIO()
-        img_qr.save(buf, format="PNG")
-        st.image(buf.getvalue(), width=200)
-        st.download_button(f"Descargar QR {sel_emp}", buf.getvalue(), f"QR_{sel_emp}.png")
+    # 📅 Selector de Rango en el Sidebar o Main
+    rango = st.selectbox("Seleccionar periodo de reporte:", 
+                        ["Hoy", "Últimos 7 días", "Últimos 30 días"], index=0)
+
+    # Calcular fecha de inicio según selección
+    hoy_dt = datetime.now(zona).date()
+    if rango == "Hoy":
+        fecha_inicio = hoy_dt
+    elif rango == "Últimos 7 días":
+        fecha_inicio = hoy_dt - timedelta(days=7)
+    else:
+        fecha_inicio = hoy_dt - timedelta(days=30)
+
+    # 🔍 Consulta filtrada a Supabase (Trae solo lo necesario)
+    res_db = supabase.table("registros").select("*").gte("fecha_hora", fecha_inicio.isoformat()).execute()
+    df_rep = pd.DataFrame(res_db.data)
+
+    if not df_rep.empty:
+        # 🛠️ Corrección de Zona Horaria (La que arreglamos antes)
+        df_rep['fecha_hora'] = pd.to_datetime(df_rep['fecha_hora']).dt.tz_localize('UTC').dt.tz_convert('America/Mexico_City')
+        df_rep['solo_fecha'] = df_rep['fecha_hora'].dt.date
+
+        # 📈 Métricas Superiores
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Total Registros", len(df_rep))
+        c2.metric("Retardos", len(df_rep[df_rep['estatus'].str.contains("Retardo|RETARDO", na=False)]))
+        c3.metric("Salidas Ant.", len(df_rep[df_rep['estatus'] == "SALIDA ANTICIPADA"]))
+        c4.metric("A Tiempo", len(df_rep[df_rep['estatus'] == "A Tiempo"]))
+
+        # 📊 Gráficos Visuales
+        col_g1, col_g2 = st.columns(2)
+        
+        with col_g1:
+            st.write("📅 **Registros por Día**")
+            st.bar_chart(df_rep.groupby('solo_fecha').size())
+
+        with col_g2:
+            st.write("👤 **Minutos de Retardo por Empleado**")
+            # Sumamos los minutos acumulados en el periodo seleccionado
+            st.bar_chart(df_rep.groupby('empleado')['min_retardo'].sum())
+
+        # 📄 Tabla Detallada
+        st.write(f"📋 **Detalle del periodo: {rango}**")
+        st.dataframe(df_rep[["empleado", "fecha_hora", "tipo", "estatus", "min_retardo", "justificacion"]].sort_values("fecha_hora", ascending=False), use_container_width=True)
+        
+        # 📥 Botón de Exportar con Nombre Dinámico
+        output = BytesIO()
+        df_rep.to_excel(output, index=False)
+        st.download_button(
+            label=f"📥 Descargar Reporte ({rango})",
+            data=output.getvalue(),
+            file_name=f"reporte_{rango.replace(' ', '_').lower()}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.info(f"No hay registros encontrados para el periodo: {rango}")
+
