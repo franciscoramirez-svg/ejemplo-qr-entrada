@@ -272,4 +272,50 @@ if user.get("rol") in ROLES_ADMIN:
 
     else:
         st.info(f"No hay registros encontrados para el periodo: {rango}")
+        
 
+    # =========================
+    # 📦 GENERAR QR (ADMIN)
+    # =========================
+    if user.get("rol") in ROLES_ADMIN:
+        st.divider()
+        st.subheader("📦 Herramientas de Códigos QR")
+    
+        emps = obtener_empleados()
+        if emps:
+            col_qr1, col_qr2 = st.columns(2)
+    
+            # --- QR INDIVIDUAL ---
+            with col_qr1:
+                st.write("👤 **Generar QR Individual**")
+                nombres_lista = [e['nombre'] for e in emps]
+                sel_emp = st.selectbox("Selecciona un empleado:", nombres_lista)
+                
+                if sel_emp:
+                    img_qr = qrcode.make(sel_emp)
+                    buf_ind = BytesIO()
+                    img_qr.save(buf_ind, format="PNG")
+                    st.image(buf_ind.getvalue(), width=200, caption=f"QR de {sel_emp}")
+                    st.download_button(f"⬇️ Descargar QR de {sel_emp}", buf_ind.getvalue(), f"QR_{sel_emp}.png", "image/png")
+    
+            # --- QR MASIVO (ZIP) ---
+            with col_qr2:
+                st.write("📦 **Descarga Masiva**")
+                if st.button("Generar ZIP con todos los QR"):
+                    zip_buffer = BytesIO()
+                    with zipfile.ZipFile(zip_buffer, "w") as z:
+                        for emp in emps:
+                            nombre_e = emp['nombre']
+                            qr_e = qrcode.make(nombre_e)
+                            img_buf_e = BytesIO()
+                            qr_e.save(img_buf_e, format='PNG')
+                            z.writestr(f"QR_{nombre_e}.png", img_buf_e.getvalue())
+                    
+                    st.download_button(
+                        "⬇️ Descargar TODO el personal (ZIP)",
+                        zip_buffer.getvalue(),
+                        file_name="QR_TODOS_EMPLEADOS.zip",
+                        mime="application/zip"
+                    )
+        else:
+            st.warning("No hay empleados en la base de datos para generar QR.")
