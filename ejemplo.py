@@ -205,7 +205,7 @@ if user.get("rol") in ROLES_ADMIN:
     df_hoy = obtener_registros_hoy()
     if not df_hoy.empty:
         st.subheader("📊 Resumen de Hoy")
-        df_hoy['fecha_hora'] = pd.to_datetime(df_hoy['fecha_hora']).dt.tz_convert('America/Mexico_City')
+        df_hoy['fecha_hora'] = pd.to_datetime(df_hoy['fecha_hora']).dt.tz_localize('UTC').dt.tz_convert('America/Mexico_City')
         
         c1, c2, c3 = st.columns(3)
         c1.metric("Total", len(df_hoy))
