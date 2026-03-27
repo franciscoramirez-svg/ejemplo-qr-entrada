@@ -54,30 +54,40 @@ def validar_geocerca(lat, lon, sucursal_id):
     return distancia_metros(lat, lon, s['lat'], s['lon']) <= s.get("radio", 100)
 
 def validar_flujo(nombre, tipo):
-    # Traemos registros desde ayer para validar entrada/salida
-    ayer_str = (datetime.now(zona).date() - timedelta(days=1)).isoformat()
-    res = supabase.table("registros").select("*").eq("empleado", nombre).gte("fecha_hora", ayer_str).execute()
-    
-    if not res.data: 
-        return True, ""
+    try:
+        # 1. Traer registros de los últimos 2 días para este empleado
+        ayer_str = (datetime.now(zona).date() - timedelta(days=1)).isoformat()
+        res = supabase.table("registros").select("*").eq("empleado", nombre).gte("fecha_hora", ayer_str).execute()
         
-    df = pd.DataFrame(res.data)
-    
-    # 🛠️ CORRECCIÓN AQUÍ: Manejo robusto de fechas
-    df['fecha_hora'] = pd.to_datetime(df['fecha_hora'], errors='coerce', utc=True)
-    df = df.dropna(subset=['fecha_hora']) # Quitamos filas con fechas corruptas
-    
-    # Convertimos a la zona horaria local para comparar
-    df['fecha_hora'] = df['fecha_hora'].dt.tz_convert('America/Mexico_City')
-    
-    hoy = datetime.now(zona).date()
+        if not res.data: 
+            return True, ""
+            
+        df = pd.DataFrame(res.data)
+        
+        # 2. LIMPIEZA EXTREMA DE FECHAS (Evita el ValueError)
+        # Convertimos a fecha, lo que no sea fecha se vuelve 'NaT' y luego se elimina
+        df['fecha_hora'] = pd.to_datetime(df['fecha_hora'], errors='coerce', utc=True)
+        df = df.dropna(subset=['fecha_hora']) 
+        
+        if df.empty: return True, ""
 
-    if tipo == "Salida":
-        hoy_regs = df[df['fecha_hora'].dt.date == hoy]
-        if not any(hoy_regs['tipo'] == "Entrada"):
-            return False, "⚠️ No puedes registrar SALIDA sin haber registrado ENTRADA hoy."
-    
-    return True, ""
+        # 3. Convertir a hora de México
+        df['fecha_hora'] = df['fecha_hora'].dt.tz_convert('America/Mexico_City')
+        hoy = datetime.now(zona).date()
+
+        # 4. Lógica de validación
+        if tipo == "Salida":
+            hoy_regs = df[df['fecha_hora'].dt.date == hoy]
+            if not any(hoy_regs['tipo'] == "Entrada"):
+                return False, "⚠️ No puedes registrar SALIDA sin haber registrado ENTRADA hoy."
+        
+        return True, ""
+
+    except Exception as e:
+        # Si algo falla catastróficamente, dejamos pasar el registro para no bloquear al empleado
+        print(f"Error en validación: {e}")
+        return True, ""
+
 
 # =========================
 # 📍 REGISTRAR
