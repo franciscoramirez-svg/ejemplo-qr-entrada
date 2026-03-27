@@ -12,6 +12,7 @@ from math import radians, cos, sin, asin, sqrt
 import smtplib
 from email.mime.text import MIMEText
 from streamlit_js_eval import get_geolocation
+from streamlit_geolocation import streamlit_geolocation
 
 # =========================
 # 🔌 SUPABASE & CONFIG
@@ -88,101 +89,100 @@ def validar_flujo(nombre, tipo):
         print(f"Error en validación: {e}")
         return True, ""
 
+
 # =========================
-# 📍 REGISTRAR (CON DIAGNÓSTICO DE DISTANCIA)
+# 📍 REGISTRAR (FUNCIÓN COMPLETA ACTUALIZADA)
 # =========================
 def registrar(nombre, tipo):
     if st.session_state.get('registro_ok'): 
         return
 
-    # 1. 🔍 DIAGNÓSTICO DE UBICACIÓN
-    loc = get_geolocation()
+    st.subheader(f"📍 Registro de {tipo}")
+    st.info("Por favor, presiona el botón de abajo para capturar tu ubicación GPS:")
     
-    with st.expander("🛠️ Panel de Diagnóstico GPS", expanded=True):
-        if not loc:
-            st.write("❌ Esperando respuesta del navegador... (Revisa el candado 🔒)")
-            if st.button("🔄 Forzar Reintento"): st.rerun()
-            return
-        elif 'error' in loc:
-            st.write(f"⚠️ Error: {loc['error'].get('message')}")
-            return
-        else:
-            lat = loc['coords']['latitude']
-            lon = loc['coords']['longitude']
-            st.write(f"✅ Coordenadas detectadas: {lat}, {lon}")
+    # 🛰️ NUEVO COMPONENTE DE GEOLOCALIZACIÓN
+    loc = streamlit_geolocation()
 
-    # 2. 🧠 VALIDACIÓN DE FLUJO
+    # Si el componente no ha devuelto coordenadas aún
+    if not loc or loc.get('latitude') is None:
+        st.warning("⚠️ Esperando GPS... Haz clic en el botón de ubicación y permite el acceso en tu navegador.")
+        return
+
+    lat = loc['latitude']
+    lon = loc['longitude']
+    st.success(f"✅ Ubicación detectada: {lat:.5f}, {lon:.5f}")
+
+    # --- 🧠 VALIDACIÓN DE FLUJO (Entrada/Salida) ---
     ok, msg = validar_flujo(nombre, tipo)
     if not ok:
         st.error(msg)
         return
 
-    # 3. 🗺️ COMPARACIÓN CON SUCURSAL
+    # --- 🗺️ COMPARACIÓN CON SUCURSAL ---
     res_suc = supabase.table("sucursales").select("*").eq("id", st.session_state.user['sucursal_id']).execute()
     if not res_suc.data:
         st.error("Configuración de sucursal no encontrada.")
         return
     
-    s = res_suc.data[0]
+    s = res_suc.data[0] # Tomamos el primer resultado
     dist = distancia_metros(lat, lon, s['lat'], s['lon'])
     radio_permitido = s.get("radio", 100)
 
-    # Validación de Geocerca con "Salto" para Admin
+    # Validación de Geocerca con "Salto" para Admin (PC/Pruebas)
     if dist > radio_permitido:
         st.error(f"❌ Fuera de rango: Estás a {dist:.0f}m de la sucursal.")
         if st.session_state.user.get('rol') in ROLES_ADMIN:
-            if not st.checkbox("🔓 Omitir Geocerca (Solo Admin para pruebas en PC)"):
+            if not st.checkbox("🔓 Omitir Geocerca (Solo Admin para pruebas)"):
                 return
         else:
             return
 
-    # 4. 📝 PROCESO DE REGISTRO FINAL (EL #4 QUE FALTABA)
-    ahora = datetime.now(zona)
-    est, min_r = "A Tiempo", 0
+    # --- 📝 PROCESO DE GUARDADO FINAL ---
+    if st.button(f"🚀 CONFIRMAR {tipo.upper()}"):
+        ahora = datetime.now(zona)
+        est, min_r = "A Tiempo", 0
 
-    if tipo == "Entrada":
-        h_lim = datetime.strptime(HORA_ENTRADA, "%H:%M:%S").time()
-        # Comparación de minutos de retardo
-        ahora_time = ahora.time()
-        diff = (datetime.combine(date.today(), ahora_time) - 
-                datetime.combine(date.today(), h_lim)).total_seconds() / 60
-        min_r = max(0, int(diff))
-        if min_r > 30: est = "RETARDO CRÍTICO"
-        elif min_r > 15: est = "Retardo"
+        if tipo == "Entrada":
+            h_lim = datetime.strptime(HORA_ENTRADA, "%H:%M:%S").time()
+            diff = (datetime.combine(date.today(), ahora.time()) - 
+                    datetime.combine(date.today(), h_lim)).total_seconds() / 60
+            min_r = max(0, int(diff))
+            if min_r > 30: est = "RETARDO CRÍTICO"
+            elif min_r > 15: est = "Retardo"
 
-    if tipo == "Salida":
-        h_salida_lim = datetime.strptime(HORA_SALIDA, "%H:%M:%S").time()
-        if ahora.time() < h_salida_lim:
-            est = "SALIDA ANTICIPADA"
+        if tipo == "Salida":
+            h_salida_lim = datetime.strptime(HORA_SALIDA, "%H:%M:%S").time()
+            if ahora.time() < h_salida_lim:
+                est = "SALIDA ANTICIPADA"
 
-    try:
-        data_ins = {
-            "empleado": nombre,
-            "fecha_hora": ahora.isoformat(),
-            "lat": lat,
-            "lon": lon,
-            "tipo": tipo,
-            "estatus": est,
-            "min_retardo": min_r,
-            "sucursal_id": st.session_state.user['sucursal_id'],
-            "justificacion": ""
-        }
-        
-        response = supabase.table("registros").insert(data_ins).execute()
-        
-        if response.data:
-            st.session_state.registro_id = response.data[0]['id']
-            st.session_state.registro_ok = True
-            st.session_state.ultimo_movimiento = f"{tipo} registrada con éxito ✅"
+        try:
+            data_ins = {
+                "empleado": nombre,
+                "fecha_hora": ahora.isoformat(),
+                "lat": lat,
+                "lon": lon,
+                "tipo": tipo,
+                "estatus": est,
+                "min_retardo": min_r,
+                "sucursal_id": st.session_state.user['sucursal_id'],
+                "justificacion": ""
+            }
             
-            if est != "A Tiempo":
-                st.session_state.justificar = True
+            response = supabase.table("registros").insert(data_ins).execute()
             
-            st.success(st.session_state.ultimo_movimiento)
-            st.rerun()
-            
-    except Exception as e:
-        st.error(f"❌ Error al guardar en base de datos: {e}")
+            if response.data:
+                st.session_state.registro_id = response.data[0]['id']
+                st.session_state.registro_ok = True
+                st.session_state.ultimo_movimiento = f"{tipo} registrada con éxito ✅"
+                
+                if est != "A Tiempo":
+                    st.session_state.justificar = True
+                
+                st.toast(st.session_state.ultimo_movimiento)
+                st.rerun()
+                
+        except Exception as e:
+            st.error(f"❌ Error en base de datos: {e}")
 
 # =========================
 # 🔐 LOGIN & SESSION
