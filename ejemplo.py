@@ -78,22 +78,20 @@ def validar_flujo(nombre, tipo):
 # 📍 REGISTRAR 
 # =========================
 def registrar(nombre, tipo):
-    if st.session_state.get('registro_ok'): return
+    if st.session_state.get('registro_ok'): 
+        return
 
-    st.subheader(f"📍 Registro de {tipo}")
-    
+    # Usamos loc_data que se capturó al inicio
     if not loc_data:
         st.warning("📡 Buscando señal GPS... Por favor permite el acceso en el candado 🔒 y espera un momento.")
-        if st.button("🔄 Forzar actualización GPS"): st.rerun()
         return
 
     try:
-        # Extraemos coordenadas del JSON retornado por el JS
         lat = loc_data['coords']['latitude']
         lon = loc_data['coords']['longitude']
         st.success(f"✅ Ubicación detectada: {lat:.5f}, {lon:.5f}")
     except Exception as e:
-        st.error("❌ Error al leer coordenadas del sensor."); return
+        st.error("❌ Error al leer coordenadas del sensor. Asegúrate de estar en HTTPS."); return
 
     # --- VALIDACIÓN DE SUCURSAL ---
     res_suc = supabase.table("sucursales").select("*").eq("id", st.session_state.user['sucursal_id']).execute()
