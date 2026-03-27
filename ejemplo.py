@@ -349,30 +349,27 @@ else:
 # =========================
 # ⚠️ JUSTIFICACIÓN
 # =========================
-if st.session_state.justificar:
 
-    st.divider()
-    st.warning("⚠️ Se requiere justificación")
-
+if st.session_state.justificar and st.session_state.registro_id:
     with st.form("just"):
         motivo = st.text_area("Escribe el motivo:")
 
         if st.form_submit_button("Guardar"):
-
-            if len(motivo) > 4:
-
-                supabase.table("registros").update({
-                    "justificacion": motivo
-                }).eq("id", st.session_state.registro_id).execute()
-
-                st.success("✅ Justificación guardada")
-
-                st.session_state.justificar = False
-                st.session_state.registro_ok = False
-                st.rerun()
-
+            # Validamos que el ID exista antes de intentar el update
+            if st.session_state.registro_id:
+                try:
+                    supabase.table("registros").update({
+                        "justificacion": motivo
+                    }).eq("id", st.session_state.registro_id).execute()
+                    
+                    st.success("✅ Justificación guardada")
+                    st.session_state.justificar = False
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Error en la base de datos: {e}")
             else:
-                st.error("Escribe más detalle")
+                st.error("⚠️ Error: No se encontró el ID del registro original.")
+
 
 # =========================
 # 📊 DASHBOARD SOLO ADMIN
