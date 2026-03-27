@@ -66,33 +66,54 @@ def validar_flujo(nombre, tipo):
     except: return True, ""
 
 # =========================
-# 📍 REGISTRAR
+# 📍 REGISTRAR 
 # =========================
 def registrar(nombre, tipo):
-    if st.session_state.get('registro_ok'): return
-    st.subheader(f"📍 Registro de {tipo}")
-    st.info("Presiona el botón para capturar tu ubicación GPS:")
-    loc = streamlit_geolocation()
-    if not loc or loc.get('latitude') is None:
-        st.warning("⚠️ Esperando GPS... Haz clic en el botón de arriba.")
+    if st.session_state.get('registro_ok'): 
         return
-    lat, lon = loc['latitude'], loc['longitude']
+
+    # 🔍 MÉTODO ORIGINAL QUE SÍ TE FUNCIONÓ
+    loc = get_geolocation()
+    
+    if not loc:
+        st.warning("📡 Buscando señal GPS... Por favor, permite el acceso en el candado 🔒 de tu navegador.")
+        # Botón de reintento manual por si el navegador se duerme
+        if st.button("🔄 REINTENTAR LECTURA GPS"):
+            st.rerun()
+        return
+
+    # Extraemos coordenadas del formato de streamlit_js_eval
+    try:
+        lat = loc['coords']['latitude']
+        lon = loc['coords']['longitude']
+        st.success(f"✅ Ubicación detectada: {lat:.5f}, {lon:.5f}")
+    except (KeyError, TypeError):
+        st.error("❌ Error al leer coordenadas del sensor.")
+        return
+
+    # --- 🧠 VALIDACIÓN DE FLUJO ---
     ok, msg = validar_flujo(nombre, tipo)
     if not ok:
         st.error(msg); return
+
+    # --- 🗺️ GEOCERCA ---
     res_suc = supabase.table("sucursales").select("*").eq("id", st.session_state.user['sucursal_id']).execute()
     if res_suc.data:
         s = res_suc.data[0]
         dist = distancia_metros(lat, lon, s['lat'], s['lon'])
         radio_p = s.get("radio", 100)
+
         if dist > radio_p:
-            st.error(f"❌ Fuera de rango ({dist:.0f}m).")
+            st.error(f"❌ Fuera de rango: Estás a {dist:.0f}m.")
             if st.session_state.user.get('rol') in ROLES_ADMIN:
-                if not st.checkbox("🔓 Omitir Geocerca (Admin)"): return
+                if not st.checkbox("🔓 OMITIR GEOCERCA (SOLO ADMIN)"): return
             else: return
+
+    # --- 📝 GUARDADO ---
     if st.button(f"🚀 CONFIRMAR {tipo.upper()}"):
         ahora = datetime.now(zona)
         est, min_r = "A Tiempo", 0
+
         if tipo == "Entrada":
             h_lim = datetime.strptime(HORA_ENTRADA, "%H:%M:%S").time()
             diff = (datetime.combine(date.today(), ahora.time()) - datetime.combine(date.today(), h_lim)).total_seconds() / 60
@@ -101,6 +122,7 @@ def registrar(nombre, tipo):
             elif min_r > 15: est = "Retardo"
         elif tipo == "Salida":
             if ahora.time() < datetime.strptime(HORA_SALIDA, "%H:%M:%S").time(): est = "SALIDA ANTICIPADA"
+
         try:
             data_ins = {
                 "empleado": nombre, "fecha_hora": ahora.isoformat(), "lat": lat, "lon": lon,
@@ -114,7 +136,10 @@ def registrar(nombre, tipo):
                 st.session_state.ultimo_movimiento = f"{tipo} registrada ✅"
                 if est != "A Tiempo": st.session_state.justificar = True
                 st.rerun()
-        except Exception as e: st.error(f"❌ Error: {e}")
+        except Exception as e:
+            st.error(f"❌ Error DB: {e}")
+
+
 
 # =========================
 # 🔐 LOGIN & SESSION
