@@ -9,7 +9,6 @@ import zipfile
 import cv2
 import numpy as np
 from math import radians, cos, sin, asin, sqrt
-from streamlit_geolocation import streamlit_geolocation
 from streamlit_js_eval import get_geolocation
 
 # =========================
@@ -27,6 +26,15 @@ ROLES_KIOSCO = ["admin", "Supervisor OP", "Supervisor Seguridad"]
 ROLES_ADMIN = ["admin"]
 
 st.set_page_config(layout="wide", page_title="NEOMOTIC Access PRO")
+
+# 🛰️ CAPTURA DE GPS GLOBAL (Evita bucles infinitos)
+if 'location' not in st.session_state:
+    st.session_state.location = None
+
+# Pide ubicación apenas carga la página
+loc_data = get_geolocation()
+if loc_data:
+    st.session_state.location = loc_data
 
 # =========================
 # 🧠 FUNCIONES NÚCLEO
@@ -72,56 +80,37 @@ def validar_flujo(nombre, tipo):
 def registrar(nombre, tipo):
     if st.session_state.get('registro_ok'): return
 
-    # 1. 🔍 CAPTURA DE GPS (MÉTODO JS_EVAL)
-    loc = get_geolocation()
-    
+    loc = st.session_state.location
     if not loc:
-        st.warning("📡 Buscando señal GPS... Haz clic en el **candado 🔒** de la URL y permite la ubicación.")
-        if st.button("🔄 FORZAR RELECTURA GPS"): st.rerun()
+        st.warning("📡 Buscando señal GPS... Asegúrate de permitir la ubicación en el **candado 🔒** de la URL.")
+        if st.button("🔄 REINTENTAR CARGAR GPS"): st.rerun()
         return
 
-    # Extraer coordenadas con seguridad
     try:
-        lat = loc['coords']['latitude']
-        lon = loc['coords']['longitude']
-    except (KeyError, TypeError):
-        st.error("❌ No se pudo leer el sensor. Intenta refrescar la página.")
-        return
+        lat, lon = loc['coords']['latitude'], loc['coords']['longitude']
+    except:
+        st.error("❌ Error al leer coordenadas."); return
 
-    # 2. 🗺️ VALIDACIÓN DE DISTANCIA (CORREGIDO)
     res_suc = supabase.table("sucursales").select("*").eq("id", st.session_state.user['sucursal_id']).execute()
-    
     if res_suc.data:
-        # Extraemos el primer (y único) elemento de la lista
-        s = res_suc.data[0] 
+        s = res_suc.data[0]
         dist = distancia_metros(lat, lon, s['lat'], s['lon'])
-        radio_p = s.get("radio", 1000) # Usamos 1000m por defecto
-
+        radio_p = s.get("radio", 1000)
         if dist > radio_p:
-            st.error(f"❌ FUERA DE RANGO")
-            st.warning(f"Estás a **{dist:.0f} metros** de la sucursal.")
-            st.info(f"El radio permitido es de **{radio_p} metros**.")
-            
+            st.error(f"❌ FUERA DE RANGO ({dist:.0f}m)")
             if st.session_state.user.get('rol') in ROLES_ADMIN:
-                if not st.checkbox("🔓 OMITIR GEOCERCA (SOLO ADMIN)"): return
+                if not st.checkbox("🔓 OMITIR GEOCERCA (ADMIN)"): return
             else: return
-    else:
-        st.error("No se encontró configuración de sucursal en la base de datos.")
-        return
-
-    # 3. 🧠 VALIDACIÓN DE FLUJO
+    
     ok, msg = validar_flujo(nombre, tipo)
     if not ok:
         st.error(msg); return
 
-    # 4. 🚀 BOTÓN DE CONFIRMACIÓN
-    st.success(f"✅ Ubicación válida ({dist:.0f}m)")
-    if st.button(f"CONFIRMAR {tipo.upper()}", use_container_width=True):
+    if st.button(f"🚀 CONFIRMAR {tipo.upper()}", use_container_width=True):
         ahora = datetime.now(zona)
         est, min_r = "A Tiempo", 0
-
-        # Lógica de Horas
         h_lim = datetime.strptime(HORA_ENTRADA, "%H:%M:%S").time()
+        
         if tipo == "Entrada":
             diff = (datetime.combine(date.today(), ahora.time()) - datetime.combine(date.today(), h_lim)).total_seconds() / 60
             min_r = max(0, int(diff))
@@ -143,10 +132,7 @@ def registrar(nombre, tipo):
                 st.session_state.ultimo_movimiento = f"{tipo} registrada ✅"
                 if est != "A Tiempo": st.session_state.justificar = True
                 st.rerun()
-        except Exception as e:
-            st.error(f"❌ Error al guardar: {e}")
-
-
+        except Exception as e: st.error(f"❌ Error DB: {e}")
 
 # =========================
 # 🔐 LOGIN & SESSION
@@ -190,8 +176,7 @@ if st.session_state.modo_kiosco:
             if c2.button("📤 SALIDA"): registrar(data, "Salida")
     if st.session_state.registro_ok:
         st.success(st.session_state.ultimo_movimiento)
-        import time
-        time.sleep(3)
+        import time; time.sleep(3)
         st.session_state.registro_ok = False
         st.rerun()
     st.stop()
@@ -255,3 +240,4 @@ if user.get("rol") in ROLES_ADMIN:
             img.save(b, format="PNG")
             st.image(b.getvalue(), width=200)
             st.download_button(f"Descargar QR {sel}", b.getvalue(), f"QR_{sel}.png")
+
