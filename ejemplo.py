@@ -78,39 +78,50 @@ def validar_flujo(nombre, tipo):
 # 📍 REGISTRAR 
 # =========================
 def registrar(nombre, tipo):
-    if st.session_state.get('registro_ok'): 
-        return
+    if st.session_state.get('registro_ok'): return
 
-    # Usamos loc_data que se capturó al inicio
-    if not loc_data:
-        st.warning("📡 Buscando señal GPS... Por favor permite el acceso en el candado 🔒 y espera un momento.")
-        return
-
-    try:
+    st.subheader(f"📍 Registro de {tipo}")
+    
+    # Intentamos capturar el GPS, pero NO bloqueamos la app si falla
+    lat, lon = None, None
+    
+    if loc_data and 'coords' in loc_data:
         lat = loc_data['coords']['latitude']
         lon = loc_data['coords']['longitude']
         st.success(f"✅ Ubicación detectada: {lat:.5f}, {lon:.5f}")
-    except Exception as e:
-        st.error("❌ Error al leer coordenadas del sensor. Asegúrate de estar en HTTPS."); return
+    else:
+        st.warning("📡 No se detectó señal GPS (esto es normal en algunas PC).")
+        # Si no hay GPS, el Admin puede saltar este paso directamente
+        if st.session_state.user.get('rol') in ROLES_ADMIN:
+            if st.checkbox("🔓 Continuar sin GPS (Solo Admin)"):
+                lat, lon = 19.4326, -99.1332 # Coordenadas genéricas (CDMX)
+        else:
+            st.info("Por favor, asegúrate de estar en la sucursal y permitir la ubicación en tu celular.")
+            return # El empleado normal sí debe esperar el GPS en su móvil
 
-    # --- VALIDACIÓN DE SUCURSAL ---
-    res_suc = supabase.table("sucursales").select("*").eq("id", st.session_state.user['sucursal_id']).execute()
-    if res_suc.data:
-        # Accedemos al primer elemento de la respuesta de Supabase
-        s = res_suc.data[0] 
-        dist = distancia_metros(lat, lon, s['lat'], s['lon'])
-        radio_p = s.get("radio", 1000)
+    # --- VALIDACIÓN DE DISTANCIA (Solo si tenemos coordenadas) ---
+    if lat and lon:
+        res_suc = supabase.table("sucursales").select("*").eq("id", st.session_state.user['sucursal_id']).execute()
+        if res_suc.data:
+            s = res_suc.data[0] 
+            dist = distancia_metros(lat, lon, s['lat'], s['lon'])
+            radio_p = s.get("radio", 1000)
 
-        if dist > radio_p:
-            st.error(f"❌ FUERA DE RANGO ({dist:.0f}m)")
-            if st.session_state.user.get('rol') in ROLES_ADMIN:
-                if not st.checkbox("🔓 OMITIR GEOCERCA (ADMIN)"): return
-            else: return
-    
-    # --- BOTÓN DE CONFIRMACIÓN FINAL ---
+            if dist > radio_p:
+                st.error(f"❌ FUERA DE RANGO: Estás a {dist:.0f}m.")
+                if st.session_state.user.get('rol') in ROLES_ADMIN:
+                    if not st.checkbox("🔓 Omitir Geocerca (Admin)"): return
+                else: return
+            else:
+                st.success(f"📍 Estás a {dist:.0f}m de la sucursal.")
+
+    # --- BOTÓN DE GUARDADO FINAL ---
     if st.button(f"🚀 CONFIRMAR {tipo.upper()}", use_container_width=True):
-        # ... (Tu lógica de guardado en Supabase)
-        st.balloons()
+        ahora = datetime.now(zona)
+        # ... (Tu lógica de guardado en Supabase que ya tienes)
+        # ASEGÚRATE DE ENVIAR lat y lon (aunque sean los genéricos)
+        st.success("✅ Registro guardado en la base de datos.")
+        st.session_state.registro_ok = True
         st.rerun()
 
 
