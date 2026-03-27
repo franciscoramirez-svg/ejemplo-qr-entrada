@@ -35,7 +35,8 @@ if 'location' not in st.session_state:
     st.session_state.location = None
 
 # Pide ubicación apenas carga la página
-loc_data = get_geolocation()
+# 🛰️ CAPTURA DE GPS CON CLAVE ÚNICA FIJA
+loc_data = get_geolocation(key='get_location_fixed')
 if loc_data:
     st.session_state.location = loc_data
 
