@@ -9,7 +9,7 @@ import zipfile
 import cv2
 import numpy as np
 from math import radians, cos, sin, asin, sqrt
-from streamlit_js_eval import get_geolocation
+from streamlit_js_eval import streamlit_js_eval, get_geolocation
 
 # =========================
 # 🔌 SUPABASE & CONFIG
