@@ -34,11 +34,13 @@ loc_global = get_geolocation()
 if 'location' not in st.session_state:
     st.session_state.location = None
 
-# Pide ubicación apenas carga la página
-# 🛰️ CAPTURA DE GPS CON CLAVE ÚNICA FIJA
-loc_data = get_geolocation(key='get_location_fixed')
-if loc_data:
-    st.session_state.location = loc_data
+# 🛰️ CAPTURA DE GPS GLOBAL (Solución definitiva para Duplicate Key y TypeError)
+loc_data = streamlit_js_eval(
+    js_expressions="navigator.geolocation.getCurrentPosition(pos => { window.parent.postMessage({type: 'streamlit:setComponentValue', value: {coords: {latitude: pos.coords.latitude, longitude: pos.coords.longitude}}}, '*') })",
+    target_id='get_location_fixed', # Esto actúa como el key único estable
+    want_output=True
+)
+
 
 # =========================
 # 🧠 FUNCIONES NÚCLEO
