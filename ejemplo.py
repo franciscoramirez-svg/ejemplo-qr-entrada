@@ -278,18 +278,19 @@ def registrar(nombre, tipo):
             "horas_extra": False
         }).execute()
 
-        st.session_state.registro_id = response.data[0]['id']
-        st.session_state.registro_ok = True
-        st.session_state.ultimo_movimiento = f"{tipo} registrada"
+        if response.data:
+            st.session_state.registro_id = response.data[0]['id']
+            st.session_state.registro_ok = True
+            st.session_state.ultimo_movimiento = f"{tipo} registrada"
+        
+            if est != "A Tiempo":
+                st.session_state.justificar = True
 
-        if est != "A Tiempo":
-            st.session_state.justificar = True
-
-        st.toast(f"{tipo} registrada", icon="✅")
-        st.rerun()
+            st.toast(f"{tipo} registrada", icon="✅")
+            st.rerun()
 
     except Exception as e:
-        st.error(f"❌ Error: {e}")
+        st.error(f"❌ Error al insertar: {e}")
 
 # =========================
 # 🖥️ KIOSCO QR
