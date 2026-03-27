@@ -100,7 +100,7 @@ def registrar(nombre, tipo):
     # --- 🗺️ GEOCERCA ---
     res_suc = supabase.table("sucursales").select("*").eq("id", st.session_state.user['sucursal_id']).execute()
     if res_suc.data:
-        s = res_suc.data[0]
+        s = res_suc.data[0] # <--- Agregamos el [0] para que no marque error de lista
         dist = distancia_metros(lat, lon, s['lat'], s['lon'])
         radio_p = s.get("radio", 100)
 
