@@ -92,56 +92,97 @@ def validar_flujo(nombre, tipo):
 # 📍 REGISTRAR (CON DIAGNÓSTICO DE DISTANCIA)
 # =========================
 def registrar(nombre, tipo):
-    if st.session_state.get('registro_ok'): return
+    if st.session_state.get('registro_ok'): 
+        return
 
+    # 1. 🔍 DIAGNÓSTICO DE UBICACIÓN
+    loc = get_geolocation()
+    
+    with st.expander("🛠️ Panel de Diagnóstico GPS", expanded=True):
+        if not loc:
+            st.write("❌ Esperando respuesta del navegador... (Revisa el candado 🔒)")
+            if st.button("🔄 Forzar Reintento"): st.rerun()
+            return
+        elif 'error' in loc:
+            st.write(f"⚠️ Error: {loc['error'].get('message')}")
+            return
+        else:
+            lat = loc['coords']['latitude']
+            lon = loc['coords']['longitude']
+            st.write(f"✅ Coordenadas detectadas: {lat}, {lon}")
+
+    # 2. 🧠 VALIDACIÓN DE FLUJO
     ok, msg = validar_flujo(nombre, tipo)
     if not ok:
         st.error(msg)
         return
 
-    # OBTENER GPS REAL
-    loc = get_geolocation()
-    
-    # 1. Si no hay respuesta del navegador
-    if not loc:
-        st.error("🚨 **ERROR DE UBICACIÓN**")
-        st.info("La PC no está enviando coordenadas. Haz clic en el **candado 🔒** junto a la URL y selecciona **'Permitir Ubicación'**.")
-        if st.button("🔄 REINTENTAR LECTURA GPS"):
-            st.rerun()
-        return
-
-    # 2. Si el navegador responde con un error técnico (ej. permiso denegado)
-    if 'error' in loc:
-        st.error(f"❌ Error de GPS: {loc['error'].get('message', 'Desconocido')}")
-        return
-
-    lat = loc['coords']['latitude']
-    lon = loc['coords']['longitude']
-    sucursal_id = st.session_state.user['sucursal_id']
-
-    # Consultar datos de la sucursal para comparar
-    suc = supabase.table("sucursales").select("*").eq("id", sucursal_id).execute().data
-    if not suc:
-        st.error("No se encontró la configuración de la sucursal.")
+    # 3. 🗺️ COMPARACIÓN CON SUCURSAL
+    res_suc = supabase.table("sucursales").select("*").eq("id", st.session_state.user['sucursal_id']).execute()
+    if not res_suc.data:
+        st.error("Configuración de sucursal no encontrada.")
         return
     
-    s = suc[0]
+    s = res_suc.data[0]
     dist = distancia_metros(lat, lon, s['lat'], s['lon'])
     radio_permitido = s.get("radio", 100)
 
-    # 3. VALIDAR GEO CON DIAGNÓSTICO VISUAL
+    # Validación de Geocerca con "Salto" para Admin
     if dist > radio_permitido:
-        st.error(f"❌ **FUERA DE RANGO**")
-        st.warning(f"Estás a **{dist:.2f} metros** de la sucursal.")
-        st.info(f"El radio permitido es de solo **{radio_permitido} metros**.")
-        st.caption(f"Tus coordenadas actuales: {lat:.5f}, {lon:.5f}")
-        return
+        st.error(f"❌ Fuera de rango: Estás a {dist:.0f}m de la sucursal.")
+        if st.session_state.user.get('rol') in ROLES_ADMIN:
+            if not st.checkbox("🔓 Omitir Geocerca (Solo Admin para pruebas en PC)"):
+                return
+        else:
+            return
 
-    # Si todo está OK, proceder al registro...
+    # 4. 📝 PROCESO DE REGISTRO FINAL (EL #4 QUE FALTABA)
     ahora = datetime.now(zona)
     est, min_r = "A Tiempo", 0
-    # ... (el resto del código de inserción en Supabase que ya tienes)
 
+    if tipo == "Entrada":
+        h_lim = datetime.strptime(HORA_ENTRADA, "%H:%M:%S").time()
+        # Comparación de minutos de retardo
+        ahora_time = ahora.time()
+        diff = (datetime.combine(date.today(), ahora_time) - 
+                datetime.combine(date.today(), h_lim)).total_seconds() / 60
+        min_r = max(0, int(diff))
+        if min_r > 30: est = "RETARDO CRÍTICO"
+        elif min_r > 15: est = "Retardo"
+
+    if tipo == "Salida":
+        h_salida_lim = datetime.strptime(HORA_SALIDA, "%H:%M:%S").time()
+        if ahora.time() < h_salida_lim:
+            est = "SALIDA ANTICIPADA"
+
+    try:
+        data_ins = {
+            "empleado": nombre,
+            "fecha_hora": ahora.isoformat(),
+            "lat": lat,
+            "lon": lon,
+            "tipo": tipo,
+            "estatus": est,
+            "min_retardo": min_r,
+            "sucursal_id": st.session_state.user['sucursal_id'],
+            "justificacion": ""
+        }
+        
+        response = supabase.table("registros").insert(data_ins).execute()
+        
+        if response.data:
+            st.session_state.registro_id = response.data[0]['id']
+            st.session_state.registro_ok = True
+            st.session_state.ultimo_movimiento = f"{tipo} registrada con éxito ✅"
+            
+            if est != "A Tiempo":
+                st.session_state.justificar = True
+            
+            st.success(st.session_state.ultimo_movimiento)
+            st.rerun()
+            
+    except Exception as e:
+        st.error(f"❌ Error al guardar en base de datos: {e}")
 
 # =========================
 # 🔐 LOGIN & SESSION
