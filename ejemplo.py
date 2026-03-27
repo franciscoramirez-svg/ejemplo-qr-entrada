@@ -69,6 +69,25 @@ def obtener_empleados():
     return supabase.table("empleados").select("*").execute().data
 
 # =========================
+#🧾 EXPORTACIÓN EXCEL
+# =========================
+def exportar_excel(df):
+
+    output = BytesIO()
+    df.to_excel(output, index=False)
+    output.seek(0)
+
+    st.download_button(
+        "⬇️ Descargar Excel",
+        output,
+        file_name="reporte_asistencia.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+           st.subheader("🧾 Exportar datos")
+           exportar_excel(df)
+
+# =========================
 # 📧 EMAIL
 # =========================
 def enviar_alerta(faltantes):
@@ -409,25 +428,6 @@ if user.get("rol") in ROLES_ADMIN:
         for f in faltantes:
             st.error(f)
 
-
-       # =========================
-       #🧾 EXPORTACIÓN EXCEL
-       # =========================
-       def exportar_excel(df):
-
-           output = BytesIO()
-           df.to_excel(output, index=False)
-           output.seek(0)
-
-           st.download_button(
-               "⬇️ Descargar Excel",
-               output,
-               file_name="reporte_asistencia.xlsx",
-               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-           )
-
-           st.subheader("🧾 Exportar datos")
-           exportar_excel(df) 
 
 # =========================
 # 📦 GENERAR QR MASIVO (ADMIN)
