@@ -9,3 +9,4 @@ pillow
 xlsxwriter
 supabase
 openpyxl
+streamlit-geolocation
