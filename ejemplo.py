@@ -54,18 +54,28 @@ def validar_geocerca(lat, lon, sucursal_id):
     return distancia_metros(lat, lon, s['lat'], s['lon']) <= s.get("radio", 100)
 
 def validar_flujo(nombre, tipo):
-    # Solo consultamos registros del empleado de hoy/ayer para velocidad
+    # Traemos registros desde ayer para validar entrada/salida
     ayer_str = (datetime.now(zona).date() - timedelta(days=1)).isoformat()
-    df = pd.DataFrame(supabase.table("registros").select("*").eq("empleado", nombre).gte("fecha_hora", ayer_str).execute().data)
+    res = supabase.table("registros").select("*").eq("empleado", nombre).gte("fecha_hora", ayer_str).execute()
     
-    if df.empty: return True, ""
-    df['fecha_hora'] = pd.to_datetime(df['fecha_hora'])
+    if not res.data: 
+        return True, ""
+        
+    df = pd.DataFrame(res.data)
+    
+    # 🛠️ CORRECCIÓN AQUÍ: Manejo robusto de fechas
+    df['fecha_hora'] = pd.to_datetime(df['fecha_hora'], errors='coerce', utc=True)
+    df = df.dropna(subset=['fecha_hora']) # Quitamos filas con fechas corruptas
+    
+    # Convertimos a la zona horaria local para comparar
+    df['fecha_hora'] = df['fecha_hora'].dt.tz_convert('America/Mexico_City')
+    
     hoy = datetime.now(zona).date()
 
     if tipo == "Salida":
         hoy_regs = df[df['fecha_hora'].dt.date == hoy]
         if not any(hoy_regs['tipo'] == "Entrada"):
-            return False, "⚠️ No puedes registrar SALIDA sin ENTRADA hoy"
+            return False, "⚠️ No puedes registrar SALIDA sin haber registrado ENTRADA hoy."
     
     return True, ""
 
