@@ -27,18 +27,12 @@ ROLES_ADMIN = ["admin"]
 
 st.set_page_config(layout="wide", page_title="NEOMOTIC Access PRO")
 
-# 🛰️ CAPTURA DE GPS GLOBAL (Para evitar el error de Duplicate Key)
-loc_global = get_geolocation()
-
-# 🛰️ CAPTURA DE GPS GLOBAL (Evita bucles infinitos)
-if 'location' not in st.session_state:
-    st.session_state.location = None
-
-# 🛰️ CAPTURA DE GPS GLOBAL (Solución definitiva para Duplicate Key y TypeError)
+# 🛰️ CAPTURA DE GPS GLOBAL
+# Usamos una clave fija para evitar el error de 'DuplicateElementKey'
 loc_data = streamlit_js_eval(
     js_expressions="navigator.geolocation.getCurrentPosition(pos => { window.parent.postMessage({type: 'streamlit:setComponentValue', value: {coords: {latitude: pos.coords.latitude, longitude: pos.coords.longitude}}}, '*') })",
-    target_id='get_location_fixed', # Esto actúa como el key único estable
-    want_output=True
+    want_output=True,
+    key='gps_global_fixed'
 )
 
 
