@@ -141,6 +141,7 @@ def registrar(nombre, tipo):
         except Exception as e:
             st.error(f"❌ Error: {e}")
 
+
 # =========================
 # 🔐 LOGIN & SESSION
 # =========================
