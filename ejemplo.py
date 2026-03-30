@@ -116,18 +116,20 @@ def enviar_reporte_diario(df_hoy):
     from email import encoders
 
     mensaje = MIMEMultipart()
-    mensaje['Subject'] = f"📊 Reporte Diario {hoy_str}"
+    mensaje['Subject'] = f"📊 Reporte Diario de Asistencia - TRV - {hoy_str}"
     mensaje['From'] = "trv@neomotic.com"
     mensaje['To'] = "francisco.ramirez@neomotic.com"
 
-    mensaje.attach(MIMEText("Se adjunta el reporte diario de asistencia."))
+    mensaje.attach(MIMEText("Buena tarde,\n\n"
+                            "Se adjunta el reporte diario de asistencia."
+    ))
     
     total = len(df_hoy)
     retardos = len(df_hoy[df_hoy['estatus'].str.contains("Retardo", na=False)])
     faltas = "calcular si quieres"
 
     mensaje.attach(MIMEText(
-        f"Resumen del día:\n\n"
+        f" Resumen del día:\n\n"
         f"Total registros: {total}\n"
         f"Retardos: {retardos}\n"
     ))
