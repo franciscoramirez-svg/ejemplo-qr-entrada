@@ -98,13 +98,19 @@ def exportar_excel(df):
 # =========================
 # 📧 EMAIL
 # =========================
-def enviar_alerta(faltantes):
+def enviar_reporte_general(df):
 
-    if not faltantes:
+    if df.empty:
+        st.warning("No hay datos para enviar")
         return
 
-    msg = MIMEText("Faltantes:\n" + "\n".join(faltantes))
-    msg['Subject'] = "Asistencia diaria - TRV"
+    # 📊 Crear Excel en memoria
+    output = BytesIO()
+    df.to_excel(output, index=False)
+    output.seek(0)
+
+    msg = MIMEText("Se adjunta el reporte general de asistencia.")
+    msg['Subject'] = "📊 Reporte General de Asistencia"
     msg['From'] = "trv@neomotic.com"
     msg['To'] = "francisco.ramirez@neomotic.com"
 
@@ -112,10 +118,30 @@ def enviar_alerta(faltantes):
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login("trv@neomotic.com", "TU_PASSWORD")
-        server.send_message(msg)
+
+        # 📎 Adjuntar archivo
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.base import MIMEBase
+        from email import encoders
+
+        mensaje = MIMEMultipart()
+        mensaje['From'] = msg['From']
+        mensaje['To'] = msg['To']
+        mensaje['Subject'] = msg['Subject']
+
+        mensaje.attach(MIMEText("Reporte adjunto."))
+
+        part = MIMEBase('application', 'octet-stream')
+        part.set_payload(output.getvalue())
+        encoders.encode_base64(part)
+        part.add_header('Content-Disposition', 'attachment; filename="reporte_asistencia.xlsx"')
+
+        mensaje.attach(part)
+
+        server.send_message(mensaje)
         server.quit()
 
-        st.success("📧 Correo enviado")
+        st.success("📧 Reporte enviado correctamente")
 
     except Exception as e:
         st.error(f"Error correo: {e}")
@@ -450,15 +476,17 @@ if user.get("rol") in ROLES_ADMIN:
         for f in faltantes:
             st.error(f)
        
-        # 📧 BOTÓN DE ALERTA
-        if st.button("📧 Enviar alerta de faltantes"):
-            enviar_alerta(faltantes)
 
     # =========================
     # 🧾 EXPORTAR
     # =========================
-    st.subheader("🧾 Exportar datos")
-    exportar_excel(df)
+    if st.subheader("🧾 Exportar datos")
+        exportar_excel(df)
+    
+    # 📧 BOTÓN DE ALERTA
+    if st.button("📧 Enviar reporte general"):
+        enviar_reporte_general(df)
+
 
 # =========================
 # 📦 GENERAR QR MASIVO (ADMIN)
