@@ -306,15 +306,12 @@ def registrar(nombre, tipo):
         st.error("🚫 Debes activar la ubicación para registrar asistencia")
         return
     
-    lat = loc["coords"]["latitude"]
-    lon = loc["coords"]["longitude"]
+       lat = loc["coords"]["latitude"]
+       lon = loc["coords"]["longitude"]
     
     st.write("📍 Ubicación:", lat, lon)
 
-    
-        lat = loc["coords"]["latitude"]
-        lon = loc["coords"]["longitude"]
-    else:
+    except:
         st.error("❌ No se pudo obtener ubicación")
         return
 
