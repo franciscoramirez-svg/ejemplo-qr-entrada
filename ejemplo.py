@@ -120,18 +120,19 @@ def enviar_reporte_diario(df_hoy):
     mensaje['From'] = "trv@neomotic.com"
     mensaje['To'] = "francisco.ramirez@neomotic.com"
 
-    mensaje.attach(MIMEText("Buena tarde,\n\n"
-                            "Se adjunta el reporte diario de asistencia."
-    ))
     
-    total = len(df_hoy)
-    retardos = len(df_hoy[df_hoy['estatus'].str.contains("Retardo", "RETARDO CRÍTICO", na=False)])
+    retardos = len(df_hoy[df_hoy['estatus'].str.contains("Retardo|CRÍTICO", na=False)])
     faltas = "calcular si quieres"
-
-    mensaje.attach(MIMEText(
-        f" Resumen del día:\n\n"
-        f"Total registros: {total}\n"
-        f"Retardos: {retardos}\n"
+    total_registros = len(df_hoy)
+    
+    mensaje.attach(MIMEText("Buena tarde,\n\n"
+                            "Se adjunta el reporte diario de asistencia." 
+                            f" Resumen del día:\n\n"
+                            f"📝 Total registros: {total_registros}\n"
+                            f"⏰ Retardos: {retardos}\n"
+                    
+                            Sistema NEOMOTIC ACCESS PRO
+                            """
     ))
     
 
@@ -491,18 +492,20 @@ if user.get("rol") in ROLES_ADMIN:
         for f in faltantes:
             st.error(f)
         
-        hora_actual = datetime.now(zona).strftime("%H:%M")
+        ahora = datetime.now(zona)
+        hora_actual = ahora.strftime("%H:%M")
+        fecha_hoy = ahora.date()
 
         if hora_actual == "19:15":
-            if "reporte_enviado" not in st.session_state:
+            if st.session_state.get("fecha_reporte") != fecha_hoy:
                 enviar_reporte_diario(hoy)
-                st.session_state.reporte_enviado = True
+                st.session_state.fecha_reporte = fecha_hoy
 
     # =========================
     # 🧾 EXPORTAR
     # =========================
-    if st.subheader("🧾 Exportar datos"):
-        exportar_excel(df)
+    st.subheader("🧾 Exportar datos")
+    exportar_excel(df)
     
     # 📧 BOTÓN DE ALERTA
     if st.button("📧 Enviar reporte diario"):
