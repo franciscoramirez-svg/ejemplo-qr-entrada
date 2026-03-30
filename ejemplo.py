@@ -487,7 +487,7 @@ if user.get("rol") in ROLES_ADMIN:
     # 🧾 EXPORTAR
     # =========================
     st.subheader("🧾 Exportar datos")
-        exportar_excel(df)
+    exportar_excel(df)
     
     # 📧 BOTÓN DE ALERTA
     if st.button("📧 Enviar reporte general")
