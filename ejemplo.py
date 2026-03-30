@@ -88,7 +88,7 @@ def exportar_excel(df):
 
     st.download_button(
         "⬇️ Descargar Excel",
-        output,
+        data=output.getvalue(),
         file_name="reporte_asistencia.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
@@ -243,10 +243,7 @@ def registrar(nombre, tipo):
 
     ahora = datetime.now(zona)
 
-   
-
-    lat = float(loc.get("lat",[19.24])[0])
-    lon = float(loc.get("lon",[-96.17])[0])
+    lat, lon = obtener_gps()
 
     # 🔒 VALIDAR GEO
     if not validar_geocerca(lat, lon, user['sucursal_id']):
