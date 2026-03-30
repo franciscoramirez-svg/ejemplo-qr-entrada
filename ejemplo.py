@@ -117,7 +117,7 @@ def enviar_reporte_general(df):
     try:
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
-        server.login("trv@neomotic.com", "TU_PASSWORD")
+        server.login("trv@neomotic.com", "tibhlarouqepjzpu")
 
         # 📎 Adjuntar archivo
         from email.mime.multipart import MIMEMultipart
@@ -475,7 +475,13 @@ if user.get("rol") in ROLES_ADMIN:
         st.subheader("🚫 Faltantes")
         for f in faltantes:
             st.error(f)
-       
+        
+        hora_actual = datetime.now(zona).strftime("%H:%M")
+
+        if hora_actual == "19:15":
+            if "reporte_enviado" not in st.session_state:
+                enviar_reporte_general(df)
+                st.session_state.reporte_enviado = True
 
     # =========================
     # 🧾 EXPORTAR
