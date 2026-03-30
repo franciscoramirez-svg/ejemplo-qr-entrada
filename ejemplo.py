@@ -305,21 +305,17 @@ def registrar(nombre, tipo):
 
     loc = get_geolocation()
     
-    # 🧠 Esperar correctamente la ubicación
-    if loc is None:
+    # 🔁 REINTENTO CONTROLADO
+    if not loc or "coords" not in loc:
         st.warning("📍 Esperando ubicación... vuelve a intentar en 2 segundos")
+        time.sleep(2)
+        st.rerun()
         return
 
-    if "coords" not in loc:
-        st.error("❌ Error obteniendo coordenadas")
-        return
+    lat = loc["coords"]["latitude"]
+    lon = loc["coords"]["longitude"]
 
-    lat = loc["coords"].get("latitude")
-    lon = loc["coords"].get("longitude")
-
-    if lat is None or lon is None:
-        st.error("❌ Coordenadas inválidas")
-        return
+    st.success(f"📍 Ubicación detectada: {lat:.5f}, {lon:.5f}")
 
     # 🔒 VALIDAR GEO
     ok_geo, msg_geo = validar_geocerca(lat, lon, user.get('sucursal_id'))
