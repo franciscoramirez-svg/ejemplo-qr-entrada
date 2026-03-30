@@ -11,7 +11,9 @@ import numpy as np
 from math import radians, cos, sin, asin, sqrt
 import smtplib
 from email.mime.text import MIMEText
-
+from streamlit_js_eval import get_geolocation
+import plotly.express as px
+import time
 
 
 # =========================
@@ -37,7 +39,7 @@ ROLES_ADMIN = ["admin"]
 # =========================
 def obtener_gps():
     try:
-        loc = st.query_params
+        params = st.query_params
         lat = float(loc.get("lat", 19.24))
         lon = float(loc.get("lon", -96.17))
         return lat, lon
@@ -102,14 +104,14 @@ def enviar_alerta(faltantes):
         return
 
     msg = MIMEText("Faltantes:\n" + "\n".join(faltantes))
-    msg['Subject'] = "Asistencia diaria"
-    msg['From'] = "tu_correo@gmail.com"
-    msg['To'] = "admin@empresa.com"
+    msg['Subject'] = "Asistencia diaria - TRV"
+    msg['From'] = "trv@neomotic.com"
+    msg['To'] = "francisco.ramirez@neomotic.com"
 
     try:
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
-        server.login("tu_correo@gmail.com", "TU_PASSWORD")
+        server.login("trv@neomotic.com", "TU_PASSWORD")
         server.send_message(msg)
         server.quit()
 
@@ -307,8 +309,7 @@ if st.session_state.modo_kiosco and user.get("rol") in ROLES_KIOSCO:
     if st.session_state.registro_ok:
 
         st.success(f"✅ {st.session_state.ultimo_movimiento}")
-
-        import time
+       
         time.sleep(2)
 
         st.session_state.registro_ok = False
@@ -413,10 +414,26 @@ if user.get("rol") in ROLES_ADMIN:
         df['dia'] = df['fecha_hora'].dt.date
 
         col1, col2 = st.columns(2)
-
-        col1.bar_chart(df.groupby('dia').size())
-
-        col2.bar_chart(df.groupby('empleado')['min_retardo'].sum())
+        
+        # 📊 Registros por día
+        fig1 = px.bar(
+            df.groupby('dia').size().reset_index(name='registros'),
+            x='dia',
+            y='registros',
+            title="Registros por día"
+        )
+        
+        col1.plotly_chart(fig1, use_container_width=True)
+        
+        # 📊 Retardos por empleado
+        fig2 = px.bar(
+            df.groupby('empleado')['min_retardo'].sum().reset_index(),
+            x='empleado',
+            y='min_retardo',
+            title="Minutos de retardo por empleado"
+        )
+        
+        col2.plotly_chart(fig2, use_container_width=True)
 
 
         st.subheader("🗺️ Ubicaciones")
@@ -432,6 +449,10 @@ if user.get("rol") in ROLES_ADMIN:
         st.subheader("🚫 Faltantes")
         for f in faltantes:
             st.error(f)
+       
+        # 📧 BOTÓN DE ALERTA
+        if st.button("📧 Enviar alerta de faltantes"):
+            enviar_alerta(faltantes)
 
     # =========================
     # 🧾 EXPORTAR
