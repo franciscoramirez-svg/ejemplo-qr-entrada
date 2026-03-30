@@ -299,8 +299,14 @@ def registrar(nombre, tipo):
         return
 
     ahora = datetime.now(zona)
-
+    
     loc = get_geolocation()
+
+    st.write("📍 Ubicación:", lat, lon)
+
+    if not loc:
+    st.warning("⚠️ Activa la ubicación y recarga la página")
+    st.stop()
 
     if loc:
         lat = loc["coords"]["latitude"]
