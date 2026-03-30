@@ -121,6 +121,17 @@ def enviar_reporte_diario(df_hoy):
     mensaje['To'] = "francisco.ramirez@neomotic.com"
 
     mensaje.attach(MIMEText("Se adjunta el reporte diario de asistencia."))
+    
+    total = len(df_hoy)
+    retardos = len(df_hoy[df_hoy['estatus'].str.contains("Retardo", na=False)])
+    faltas = "calcular si quieres"
+
+    mensaje.attach(MIMEText(
+        f"Resumen del día:\n\n"
+        f"Total registros: {total}\n"
+        f"Retardos: {retardos}\n"
+    ))
+    
 
     part = MIMEBase('application', 'octet-stream')
     part.set_payload(output.getvalue())
@@ -482,7 +493,7 @@ if user.get("rol") in ROLES_ADMIN:
 
         if hora_actual == "19:15":
             if "reporte_enviado" not in st.session_state:
-                enviar_reporte_general(df)
+                enviar_reporte_diario(hoy)
                 st.session_state.reporte_enviado = True
 
     # =========================
