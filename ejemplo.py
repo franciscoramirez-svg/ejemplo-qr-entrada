@@ -234,8 +234,7 @@ def registrar(nombre, tipo):
 
     ahora = datetime.now(zona)
 
-    # 📡 GPS REAL (desde navegador)
-    loc = st.experimental_get_query_params()
+   
 
     lat = float(loc.get("lat",[19.24])[0])
     lon = float(loc.get("lon",[-96.17])[0])
