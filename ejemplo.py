@@ -271,7 +271,11 @@ def registrar(nombre, tipo):
 
     ahora = datetime.now(zona)
 
-    lat, lon = obtener_gps()
+    loc = get_geolocation()
+
+    if loc:
+        lat = loc["coords"]["latitude"]
+        lon = loc["coords"]["longitude"]
 
     # 🔒 VALIDAR GEO
     if not validar_geocerca(lat, lon, user['sucursal_id']):
