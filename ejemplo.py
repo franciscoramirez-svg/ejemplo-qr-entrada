@@ -125,13 +125,13 @@ def enviar_reporte_diario(df_hoy):
     ))
     
     total = len(df_hoy)
-    retardos = len(df_hoy[df_hoy['estatus'].str.contains("Retardo", na=False)])
+    retardos = len(df_hoy[df_hoy['estatus'].str.contains("Retardo", "RETARDO CRITICO", na=False)])
     faltas = "calcular si quieres"
 
     mensaje.attach(MIMEText(
         f" Resumen del día:\n\n"
         f"Total registros: {total}\n"
-        f"Retardos: {estatus}\n"
+        f"Retardos: {retardos}\n"
     ))
     
 
