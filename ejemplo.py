@@ -208,15 +208,23 @@ if not st.session_state.user:
         else:
             st.error("❌ Datos incorrectos")
 
-if not user.get("sucursal_id"):
-    st.error("🚫 No tienes sucursal asignada. Contacta a administración.")
+
     st.stop()
 
 # =========================
 # 👤 USER
 # =========================
-user = st.session_state.user
+user = st.session_state.get(user)
 
+# 🚨 VALIDACIÓN DE SUCURSAL
+if not user:
+    st.error("Sesión inválida")
+    st.stop()
+
+if not user.get("sucursal_id"):
+    st.error("🚫 No tienes sucursal asignada. Contacta a administración.")
+    st.stop()
+    
 # 🔥 FIX ADMIN NO BLOQUEADO
 if user.get("rol") in ROLES_ADMIN:
     st.session_state.registro_ok = False
