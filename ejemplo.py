@@ -284,6 +284,8 @@ def validar_flujo(nombre, tipo):
 
     return True, ""
 
+with st.spinner("📡 Obteniendo ubicación..."):
+    time.sleep(1)
 # =========================
 # 📍 REGISTRAR
 # =========================
