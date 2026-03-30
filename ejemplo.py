@@ -66,7 +66,7 @@ def validar_geocerca(lat, lon, sucursal_id):
         .execute().data
 
     if not suc:
-        return True, f"❌ Sucursal no registrada en sistema"
+        return True, "❌ Sucursal no registrada en sistema"
 
     s = suc[0]
 
@@ -129,7 +129,7 @@ def enviar_reporte_diario(df_hoy):
 
     
     retardos = len(df_hoy[df_hoy['estatus'].str.contains("Retardo|CRÍTICO", na=False)])
-    faltas = len(faltantes)
+    faltas = "a futuro"
     total_registros = len(df_hoy)
     
     mensaje.attach(MIMEText("Buena tarde,\n\n"
@@ -301,14 +301,17 @@ def registrar(nombre, tipo):
     ahora = datetime.now(zona)
     
     loc = get_geolocation()
-
+    
+    if not loc:
+        st.error("🚫 Debes activar la ubicación para registrar asistencia")
+        return
+    
+    lat = loc["coords"]["latitude"]
+    lon = loc["coords"]["longitude"]
+    
     st.write("📍 Ubicación:", lat, lon)
 
-    if not loc:
-        st.warning("⚠️ Activa la ubicación y recarga la página")
-        st.stop()
-
-    if loc:
+    
         lat = loc["coords"]["latitude"]
         lon = loc["coords"]["longitude"]
     else:
