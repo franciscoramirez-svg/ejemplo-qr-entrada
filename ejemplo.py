@@ -131,7 +131,7 @@ def enviar_reporte_diario(df_hoy):
     mensaje.attach(MIMEText(
         f" Resumen del día:\n\n"
         f"Total registros: {total}\n"
-        f"Retardos: {retardos}\n"
+        f"Retardos: {estatus}\n"
     ))
     
 
