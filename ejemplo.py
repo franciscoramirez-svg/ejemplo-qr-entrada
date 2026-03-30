@@ -302,18 +302,17 @@ def registrar(nombre, tipo):
     
     loc = get_geolocation()
     
-    if not loc:
-        st.error("🚫 Debes activar la ubicación para registrar asistencia")
-        return
-        
-    try:
-        lat = loc["coords"]["latitude"]
-        lon = loc["coords"]["longitude"]
-    
+   if not loc or "coords" not in loc:
+       st.warning("Activa la ubicación y presiona nuevamnete") 
 
-    except:
-        st.error("❌ No se pudo obtener ubicación")
-        return
+       if st.button ("🔄 Reintentar ubicación")
+           st.rerun()
+       return
+       
+    lat = loc["coords"]["latitude"]
+    lon = loc["coords"]["longitude"]
+
+    st.write(f"📍 Ubicación detectada: {lat}, {lon}")    
 
     # 🔒 VALIDAR GEO
     ok_geo, msg_geo = validar_geocerca(lat, lon, user.get('sucursal_id'))
