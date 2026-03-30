@@ -55,20 +55,27 @@ def distancia_metros(lat1, lon1, lat2, lon2):
 
 
 def validar_geocerca(lat, lon, sucursal_id):
+    
+    # 🚨 VALIDACIÓN NUEVA
+    if not sucursal_id:
+        return False, "❌ No tienes sucursal asignada"
 
-    suc = supabase.table("sucursales").select("*").eq("id", sucursal_id).execute().data
+    suc = supabase.table("sucursales")\
+        .select("*")\
+        .eq("id", sucursal_id)\
+        .execute().data
 
     if not suc:
-        return True
+        return True, "❌ Sucursal no válida"
 
     s = suc[0]
 
     dist = distancia_metros(lat, lon, s['lat'], s['lon'])
 
     if dist > s.get("radio", 100):
-        return False
+        return False, "❌ Estás fuera de la sucursal"
 
-    return True
+    return True, ""
 
 # =========================
 # 🧠 FUNCIONES
@@ -201,6 +208,8 @@ if not st.session_state.user:
         else:
             st.error("❌ Datos incorrectos")
 
+if not user.get("sucursal_id"):
+    st.error("🚫 No tienes sucursal asignada. Contacta a administración.")
     st.stop()
 
 # =========================
@@ -290,8 +299,10 @@ def registrar(nombre, tipo):
         lon = loc["coords"]["longitude"]
 
     # 🔒 VALIDAR GEO
-    if not validar_geocerca(lat, lon, user['sucursal_id']):
-        st.error("❌ Fuera de la sucursal")
+    ok_geo, msg_geo = validar_geocerca(lat, lon, user.get('sucursal_id'))
+
+    if not ok_geo:
+        st.error(msg_geo)
         return
 
     est = "A Tiempo"
