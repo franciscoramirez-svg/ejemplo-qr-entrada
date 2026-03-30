@@ -132,7 +132,6 @@ def enviar_reporte_diario(df_hoy):
                             f"⏰ Retardos: {retardos}\n"
                     
                             f"Sistema NEOMOTIC ACCESS PRO"
-                            """
     ))
     
 
