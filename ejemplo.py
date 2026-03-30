@@ -305,17 +305,19 @@ def registrar(nombre, tipo):
 
     loc = get_geolocation()
     
-    # 🔁 REINTENTO CONTROLADO
-    if not loc or "coords" not in loc:
-        st.warning("📍 Esperando ubicación... vuelve a intentar en 2 segundos")
-        time.sleep(2)
-        st.rerun()
+        # 🚨 CASO 1: No hay respuesta aún
+    if loc is None:
+        st.info("📡 Solicitando ubicación... acepta el permiso del navegador")
         return
 
+    # 🚨 CASO 2: No viene estructura correcta
+    if "coords" not in loc:
+        st.warning("⚠️ No se pudo obtener ubicación. Verifica permisos del navegador")
+        return
+
+    # ✅ YA TENEMOS GPS
     lat = loc["coords"]["latitude"]
     lon = loc["coords"]["longitude"]
-
-    st.success(f"📍 Ubicación detectada: {lat:.5f}, {lon:.5f}")
 
     # 🔒 VALIDAR GEO
     ok_geo, msg_geo = validar_geocerca(lat, lon, user.get('sucursal_id'))
