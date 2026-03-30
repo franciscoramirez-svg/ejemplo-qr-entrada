@@ -301,8 +301,8 @@ def registrar(nombre, tipo):
     ahora = datetime.now(zona)
 
     if st.button("📍 Obtener ubicación"):
-    st.session_state.loc = get_geolocation()
-    
+        st.session_state.loc = get_geolocation()
+
     loc = get_geolocation()
     
     # 🧠 Esperar correctamente la ubicación
