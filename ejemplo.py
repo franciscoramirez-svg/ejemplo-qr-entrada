@@ -490,7 +490,7 @@ if user.get("rol") in ROLES_ADMIN:
         exportar_excel(df)
     
     # 📧 BOTÓN DE ALERTA
-    if st.button("📧 Enviar reporte general"):
+    if st.button("📧 Enviar reporte general")
         enviar_reporte_general(df)
 
 
