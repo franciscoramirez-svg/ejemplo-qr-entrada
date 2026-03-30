@@ -214,13 +214,13 @@ if not st.session_state.user:
 # =========================
 # 👤 USER
 # =========================
-user = st.session_state.get(user)
+user = st.session_state.get("user")
 
-# 🚨 VALIDACIÓN DE SUCURSAL
 if not user:
     st.error("Sesión inválida")
     st.stop()
-
+    
+# 🚨 VALIDACIÓN DE SUCURSAL
 if not user.get("sucursal_id"):
     st.error("🚫 No tienes sucursal asignada. Contacta a administración.")
     st.stop()
