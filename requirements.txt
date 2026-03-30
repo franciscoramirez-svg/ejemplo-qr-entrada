@@ -10,3 +10,4 @@ xlsxwriter
 supabase
 openpyxl
 streamlit-geolocation
+plotly
