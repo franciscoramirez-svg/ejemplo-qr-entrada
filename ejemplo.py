@@ -130,6 +130,7 @@ def enviar_reporte_diario(df_hoy):
                             f" Resumen del día:\n\n"
                             f"📝 Total registros: {total_registros}\n"
                             f"⏰ Retardos: {retardos}\n"
+                            f"🚫 Faltantes: {faltas}\n"
                             f"\n"
                             f"Sistema NEOMOTIC ACCESS PRO"
     ))
