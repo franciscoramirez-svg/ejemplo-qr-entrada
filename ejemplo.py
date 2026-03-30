@@ -310,7 +310,6 @@ def registrar(nombre, tipo):
         lat = loc["coords"]["latitude"]
         lon = loc["coords"]["longitude"]
     
-        st.write("📍 Ubicación:", lat, lon)
 
     except:
         st.error("❌ No se pudo obtener ubicación")
