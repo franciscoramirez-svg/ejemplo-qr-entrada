@@ -305,8 +305,8 @@ def registrar(nombre, tipo):
     st.write("📍 Ubicación:", lat, lon)
 
     if not loc:
-    st.warning("⚠️ Activa la ubicación y recarga la página")
-    st.stop()
+        st.warning("⚠️ Activa la ubicación y recarga la página")
+        st.stop()
 
     if loc:
         lat = loc["coords"]["latitude"]
