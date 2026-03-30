@@ -66,7 +66,7 @@ def validar_geocerca(lat, lon, sucursal_id):
         .execute().data
 
     if not suc:
-        return True, f"❌ No perteneces a esta sucursal"
+        return True, f"❌ Sucursal no registrada en sistema"
 
     s = suc[0]
 
@@ -305,6 +305,9 @@ def registrar(nombre, tipo):
     if loc:
         lat = loc["coords"]["latitude"]
         lon = loc["coords"]["longitude"]
+    else:
+        st.error("❌ No se pudo obtener ubicación")
+        return
 
     # 🔒 VALIDAR GEO
     ok_geo, msg_geo = validar_geocerca(lat, lon, user.get('sucursal_id'))
