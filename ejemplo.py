@@ -299,19 +299,27 @@ def registrar(nombre, tipo):
         return
 
     ahora = datetime.now(zona)
+
+    if st.button("📍 Obtener ubicación"):
+    st.session_state.loc = get_geolocation()
     
     loc = get_geolocation()
     
-    if not loc or "coords" not in loc:
-        st.error("❌ No se pudo obtener ubicación")
-        st.warning("⚠️ Activa el GPS del navegador y recarga la página")
+    # 🧠 Esperar correctamente la ubicación
+    if loc is None:
+        st.warning("📍 Esperando ubicación... vuelve a intentar en 2 segundos")
         return
 
-    lat = loc["coords"]["latitude"]
-    lon = loc["coords"]["longitude"]
+    if "coords" not in loc:
+        st.error("❌ Error obteniendo coordenadas")
+        return
 
-    # DEBUG (opcional)
-    st.write(f"📍 Ubicación detectada: {lat}, {lon}")
+    lat = loc["coords"].get("latitude")
+    lon = loc["coords"].get("longitude")
+
+    if lat is None or lon is None:
+        st.error("❌ Coordenadas inválidas")
+        return
 
     # 🔒 VALIDAR GEO
     ok_geo, msg_geo = validar_geocerca(lat, lon, user.get('sucursal_id'))
