@@ -66,7 +66,7 @@ def validar_geocerca(lat, lon, sucursal_id):
         .execute().data
 
     if not suc:
-        return True, "❌ Sucursal no válida"
+        return True, f"❌ No perteneces a esta sucursal"
 
     s = suc[0]
 
