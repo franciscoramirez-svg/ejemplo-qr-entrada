@@ -35,6 +35,15 @@ ROLES_ADMIN = ["admin"]
 # =========================
 # 📡 GEO
 # =========================
+def obtener_gps():
+    try:
+        loc = st.query_params
+        lat = float(loc.get("lat", 19.24))
+        lon = float(loc.get("lon", -96.17))
+        return lat, lon
+    except:
+        return 19.24, -96.17
+        
 def distancia_metros(lat1, lon1, lat2, lon2):
     R = 6371000
     dlat = radians(lat2 - lat1)
