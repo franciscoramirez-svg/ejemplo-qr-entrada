@@ -40,8 +40,8 @@ ROLES_ADMIN = ["admin"]
 def obtener_gps():
     try:
         params = st.query_params
-        lat = float(loc.get("lat", 19.24))
-        lon = float(loc.get("lon", -96.17))
+        lat = float(params.get("lat", 19.24))
+        lon = float(params.get("lon", -96.17))
         return lat, lon
     except:
         return 19.24, -96.17
@@ -98,54 +98,52 @@ def exportar_excel(df):
 # =========================
 # 📧 EMAIL
 # =========================
-def enviar_reporte_general(df):
+def enviar_reporte_diario(df_hoy):
 
-    if df.empty:
-        st.warning("No hay datos para enviar")
+    if df_hoy.empty:
+        st.warning("No hay registros hoy")
         return
 
-    # 📊 Crear Excel en memoria
+    # 📊 Excel solo de HOY
     output = BytesIO()
-    df.to_excel(output, index=False)
+    df_hoy.to_excel(output, index=False)
     output.seek(0)
 
-    msg = MIMEText("Se adjunta el reporte general de asistencia.")
-    msg['Subject'] = "📊 Reporte General de Asistencia"
-    msg['From'] = "trv@neomotic.com"
-    msg['To'] = "francisco.ramirez@neomotic.com"
+    hoy_str = datetime.now(zona).strftime("%Y-%m-%d")
+
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.base import MIMEBase
+    from email import encoders
+
+    mensaje = MIMEMultipart()
+    mensaje['Subject'] = f"📊 Reporte Diario {hoy_str}"
+    mensaje['From'] = "trv@neomotic.com"
+    mensaje['To'] = "francisco.ramirez@neomotic.com"
+
+    mensaje.attach(MIMEText("Se adjunta el reporte diario de asistencia."))
+
+    part = MIMEBase('application', 'octet-stream')
+    part.set_payload(output.getvalue())
+    encoders.encode_base64(part)
+    part.add_header(
+        'Content-Disposition',
+        f'attachment; filename="reporte_{hoy_str}.xlsx"'
+    )
+
+    mensaje.attach(part)
 
     try:
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login("trv@neomotic.com", "tibhlarouqepjzpu")
 
-        # 📎 Adjuntar archivo
-        from email.mime.multipart import MIMEMultipart
-        from email.mime.base import MIMEBase
-        from email import encoders
-
-        mensaje = MIMEMultipart()
-        mensaje['From'] = msg['From']
-        mensaje['To'] = msg['To']
-        mensaje['Subject'] = msg['Subject']
-
-        mensaje.attach(MIMEText("Reporte adjunto."))
-
-        part = MIMEBase('application', 'octet-stream')
-        part.set_payload(output.getvalue())
-        encoders.encode_base64(part)
-        part.add_header('Content-Disposition', 'attachment; filename="reporte_asistencia.xlsx"')
-
-        mensaje.attach(part)
-
         server.send_message(mensaje)
         server.quit()
 
-        st.success("📧 Reporte enviado correctamente")
+        st.success("📧 Reporte diario enviado correctamente")
 
     except Exception as e:
         st.error(f"Error correo: {e}")
-
 
 # =========================
 # 🔐 SESSION
@@ -490,12 +488,12 @@ if user.get("rol") in ROLES_ADMIN:
     # =========================
     # 🧾 EXPORTAR
     # =========================
-    st.subheader("🧾 Exportar datos")
-    exportar_excel(df)
+    if st.subheader("🧾 Exportar datos"):
+        exportar_excel(df)
     
     # 📧 BOTÓN DE ALERTA
-    st.button("📧 Enviar reporte general")
-    enviar_reporte_general(df)
+    if st.button("📧 Enviar reporte diario"):
+        enviar_reporte_diario(hoy)
 
 
 # =========================
