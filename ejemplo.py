@@ -454,7 +454,7 @@ if st.session_state.justificar:
                     
                      # Limpiamos el estado para que desaparezca el formulario
                      st.session_state.justificar = False
-                     st.session_state.forzar_justificacion = False
+                     st.session_state.pendiente_registro = True
 
                      st.rerun()
                 
