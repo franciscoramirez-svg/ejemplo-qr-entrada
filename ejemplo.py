@@ -455,10 +455,10 @@ if st.session_state.justificar:
                     
                      # Limpiamos el estado para que desaparezca el formulario
                      st.session_state.justificar = False
-                     st.session_state.registro_ok = None
                      st.session_state.forzar_justificacion = False
                 
-                     st.rerun()
+                     # 🔥 REGISTRAR AUTOMÁTICAMENTE
+                     registrar(user['nombre'], "Entrada")
                 
                 except Exception as e:
                     st.error(f"Error al actualizar en Supabase: {e}")
