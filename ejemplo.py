@@ -447,17 +447,19 @@ if st.session_state.justificar:
         if st.form_submit_button("Guardar Justificación"):
             if len(motivo) > 5:
                 try:
-                    if st.session_state.registro_id:
-                        supabase.table("registros").update({
+                     supabase.table("registros").update({
                             "justificacion": motivo
-                        }).eq("id", st.session_state.registro_id).execute()
+                     }).eq("id", st.session_state.registro_id).execute()
 
                     st.success("✅ Justificación guardada correctamente")
                     
                     # Limpiamos el estado para que desaparezca el formulario
                     st.session_state.justificar = False
-                    st.session_state.registro_ok = False
+                    st.session_state.registro_ok = None
+                    st.session_state.forzar_justificacion = False
+                
                     st.rerun()
+                
                 except Exception as e:
                     st.error(f"Error al actualizar en Supabase: {e}")
             else:
