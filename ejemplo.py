@@ -169,6 +169,8 @@ def enviar_reporte_diario(df_hoy):
 # =========================
 # 🔐 SESSION
 # =========================
+if 'pendiente_registro' not in st.session_state:
+    st.session_state.pendiente_registro = False
 if 'user' not in st.session_state:
     st.session_state.user = None
 if 'justificar' not in st.session_state:
@@ -307,9 +309,6 @@ def registrar(nombre, tipo):
         return
 
     ahora = datetime.now(zona)
-
-    if st.button("📍 Obtener ubicación"):
-        st.session_state.loc = get_geolocation()
 
     loc = get_geolocation()
     
@@ -456,15 +455,20 @@ if st.session_state.justificar:
                      # Limpiamos el estado para que desaparezca el formulario
                      st.session_state.justificar = False
                      st.session_state.forzar_justificacion = False
-                
-                     # 🔥 REGISTRAR AUTOMÁTICAMENTE
-                     registrar(user['nombre'], "Entrada")
+
+                     st.rerun()
                 
                 except Exception as e:
                     st.error(f"Error al actualizar en Supabase: {e}")
             else:
                 st.error("Por favor, escribe un motivo más detallado (mínimo 6 caracteres).")
-
+                
+# =========================
+# 🔥 REGISTRO POST-JUSTIFICACIÓN
+# =========================
+if st.session_state.get("pendiente_registro"):
+    st.session_state.pendiente_registro = False
+    registrar(user['nombre'], "Entrada")
 
 # =========================
 # 📊 DASHBOARD SOLO ADMIN
