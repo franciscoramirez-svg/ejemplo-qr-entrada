@@ -279,13 +279,19 @@ def validar_flujo(nombre, tipo):
         ayer_regs = df[(df['empleado'] == nombre) & (df['fecha_hora'].dt.date == ayer)]
 
         if any(ayer_regs['tipo'] == "Entrada") and not any(ayer_regs['tipo'] == "Salida"):
+            # 🔥 Obtener el registro de ayer SIN salida
+            reg_ayer = ayer_regs[ayer_regs['tipo'] == "Entrada"].iloc[-1]
+        
             st.session_state.justificar = True
-            return False, "⚠️ Debes justificar falta de salida de ayer"
+            st.session_state.registro_id = reg_ayer['id']  # 🔥 AQUÍ LA CLAVE
+        
+            return True, "⚠️ Falta salida de ayer, se requerirá justificación"
 
     return True, ""
 
 with st.spinner("📡 Obteniendo ubicación..."):
     time.sleep(1)
+    
 # =========================
 # 📍 REGISTRAR
 # =========================
