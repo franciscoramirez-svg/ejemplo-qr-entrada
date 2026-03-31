@@ -431,7 +431,7 @@ else:
 # =========================
 # ⚠️ JUSTIFICACIÓN
 # =========================
-if st.session_state.justificar and st.session_state.registro_id:
+if st.session_state.justificar:
     st.divider()
     st.warning("⚠️ Se requiere justificación por el estatus del registro")
 
