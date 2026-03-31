@@ -451,14 +451,14 @@ if st.session_state.justificar:
                             "justificacion": motivo
                      }).eq("id", st.session_state.registro_id).execute()
 
-                    st.success("✅ Justificación guardada correctamente")
+                     st.success("✅ Justificación guardada correctamente")
                     
-                    # Limpiamos el estado para que desaparezca el formulario
-                    st.session_state.justificar = False
-                    st.session_state.registro_ok = None
-                    st.session_state.forzar_justificacion = False
+                     # Limpiamos el estado para que desaparezca el formulario
+                     st.session_state.justificar = False
+                     st.session_state.registro_ok = None
+                     st.session_state.forzar_justificacion = False
                 
-                    st.rerun()
+                     st.rerun()
                 
                 except Exception as e:
                     st.error(f"Error al actualizar en Supabase: {e}")
