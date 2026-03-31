@@ -447,10 +447,10 @@ if st.session_state.justificar:
         if st.form_submit_button("Guardar Justificación"):
             if len(motivo) > 5:
                 try:
-                    # USAMOS EL ID GUARDADO EN LA SESIÓN
-                    supabase.table("registros").update({
-                        "justificacion": motivo
-                    }).eq("id", st.session_state.registro_id).execute()
+                    if st.session_state.registro_id:
+                        supabase.table("registros").update({
+                            "justificacion": motivo
+                        }).eq("id", st.session_state.registro_id).execute()
 
                     st.success("✅ Justificación guardada correctamente")
                     
