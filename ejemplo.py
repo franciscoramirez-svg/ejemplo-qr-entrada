@@ -215,6 +215,8 @@ if 'bloqueado_hasta' not in st.session_state:
     st.session_state.bloqueado_hasta = None
 if 'ultima_geo' not in st.session_state:
     st.session_state.ultima_geo = None
+if 'requiere_registro_post_justificacion' not in st.session_state:
+    st.session_state.requiere_registro_post_justificacion = False
 
 st.set_page_config(layout="wide")
 
@@ -330,6 +332,7 @@ def validar_flujo(nombre, tipo):
         
             st.session_state.justificar = True
             st.session_state.registro_id = reg_ayer['id']  # 🔥 AQUÍ LA CLAVE
+            st.session_state.requiere_registro_post_justificacion = True
         
             return True, "⚠️ Falta salida de ayer, se requerirá justificación"
 
@@ -422,6 +425,7 @@ def registrar(nombre, tipo):
         
             if est != "A Tiempo":
                 st.session_state.justificar = True
+                st.session_state.requiere_registro_post_justificacion = False
 
             st.toast(f"{tipo} registrada", icon="✅")
             st.rerun()
@@ -511,7 +515,8 @@ if st.session_state.justificar:
                     
                      # Limpiamos el estado para que desaparezca el formulario
                      st.session_state.justificar = False
-                     st.session_state.pendiente_registro = True
+                     st.session_state.pendiente_registro = st.session_state.get("requiere_registro_post_justificacion", False)
+                     st.session_state.requiere_registro_post_justificacion = False
 
                      st.rerun()
                 
@@ -547,7 +552,7 @@ if user.get("rol") in ROLES_ADMIN:
 
         c1, c2, c3 = st.columns(3)
         c1.metric("Registros hoy", len(hoy))
-        c2.metric("Retardos", len(hoy[hoy['estatus'].str.contains("Retardo", na=False)]))
+        c2.metric("Retardos", len(hoy[hoy['estatus'].str.contains("Retardo|CRÍTICO", case=False, na=False)]))
         c3.metric("Salidas anticipadas", len(hoy[hoy['estatus']=="SALIDA ANTICIPADA"]))
 
         st.dataframe(hoy.sort_values("fecha_hora", ascending=False))
