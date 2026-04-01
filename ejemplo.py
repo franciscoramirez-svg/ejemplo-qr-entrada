@@ -212,6 +212,8 @@ if 'intentos_login' not in st.session_state:
     st.session_state.intentos_login = 0
 if 'bloqueado_hasta' not in st.session_state:
     st.session_state.bloqueado_hasta = None
+if 'ultima_geo' not in st.session_state:
+    st.session_state.ultima_geo = None
 
 st.set_page_config(layout="wide")
 
@@ -333,6 +335,11 @@ def validar_flujo(nombre, tipo):
 
 with st.spinner("📡 Obteniendo ubicación..."):
     time.sleep(1)
+
+# Intentamos obtener GPS en cada render y lo guardamos para usarlo al registrar.
+geo_actual = get_geolocation()
+if geo_actual and "coords" in geo_actual:
+    st.session_state.ultima_geo = geo_actual
     
 # =========================
 # 📍 REGISTRAR
@@ -350,11 +357,11 @@ def registrar(nombre, tipo):
 
     ahora = datetime.now(zona)
 
-    loc = get_geolocation()
+    loc = st.session_state.get("ultima_geo")
     
-        # 🚨 CASO 1: No hay respuesta aún
+    # 🚨 CASO 1: No hay respuesta aún
     if loc is None:
-        st.info("📡 Solicitando ubicación... acepta el permiso del navegador")
+        st.info("📡 No tenemos tu ubicación todavía. Acepta el permiso del navegador y vuelve a presionar.")
         return
 
     # 🚨 CASO 2: No viene estructura correcta
@@ -461,6 +468,14 @@ if st.session_state.modo_kiosco and user.get("rol") in ROLES_KIOSCO:
 # 🧾 NORMAL
 # =========================
 st.markdown("## 🕒 Reloj Checador")
+if st.session_state.get("ultima_geo") and "coords" in st.session_state.ultima_geo:
+    st.caption(
+        f"📍 GPS detectado: "
+        f"{st.session_state.ultima_geo['coords']['latitude']:.6f}, "
+        f"{st.session_state.ultima_geo['coords']['longitude']:.6f}"
+    )
+else:
+    st.caption("📍 GPS pendiente: permite ubicación en el navegador para poder registrar.")
 
 if st.session_state.registro_ok and user.get("rol") not in ROLES_ADMIN:
     st.success(f"✅ {st.session_state.ultimo_movimiento}")
@@ -569,6 +584,14 @@ if user.get("rol") in ROLES_ADMIN:
         pts = hoy.dropna(subset=['lat','lon'])
         if not pts.empty:
             st.map(pts)
+
+        else:
+            ultimos = df.dropna(subset=['lat', 'lon']).sort_values("fecha_hora", ascending=False).head(200)
+            if not ultimos.empty:
+                st.info("No hay ubicaciones para hoy; mostrando registros más recientes.")
+                st.map(ultimos[['lat', 'lon']])
+            else:
+                st.info("No hay coordenadas registradas todavía.")
 
         empleados = obtener_empleados()
         presentes = hoy['empleado'].unique()
