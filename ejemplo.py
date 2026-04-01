@@ -14,6 +14,8 @@ from email.mime.text import MIMEText
 from streamlit_js_eval import get_geolocation
 import plotly.express as px
 import time
+import hashlib
+import hmac
 
 
 # =========================
@@ -43,7 +45,7 @@ def obtener_gps():
         lat = float(params.get("lat", 19.24))
         lon = float(params.get("lon", -96.17))
         return lat, lon
-    except:
+    except (TypeError, ValueError):
         return 19.24, -96.17
         
 def distancia_metros(lat1, lon1, lat2, lon2):
@@ -66,7 +68,7 @@ def validar_geocerca(lat, lon, sucursal_id):
         .execute().data
 
     if not suc:
-        return True, "❌ Sucursal no registrada en sistema"
+        return False, "❌ Sucursal no registrada en sistema"
 
     s = suc[0]
 
@@ -85,6 +87,22 @@ def obtener_registros():
 
 def obtener_empleados():
     return supabase.table("empleados").select("*").execute().data
+
+def validar_pin(empleado, pin_input):
+    """
+    Soporta transición de PIN en texto plano a hash SHA-256:
+    - Si existe `pin_hash` (hex), valida contra hash SHA-256 del input.
+    - Si no existe, usa `pin` legado en texto plano.
+    """
+    pin_hash = empleado.get("pin_hash")
+    if pin_hash:
+        pin_input_hash = hashlib.sha256(pin_input.encode("utf-8")).hexdigest()
+        return hmac.compare_digest(pin_input_hash, str(pin_hash))
+
+    pin_legacy = empleado.get("pin")
+    if pin_legacy is None:
+        return False
+    return hmac.compare_digest(str(pin_legacy), pin_input)
 
 # =========================
 #🧾 EXPORTACIÓN EXCEL
@@ -124,8 +142,16 @@ def enviar_reporte_diario(df_hoy):
 
     mensaje = MIMEMultipart()
     mensaje['Subject'] = f"📊 Reporte Diario de Asistencia - TRV - {hoy_str}"
-    mensaje['From'] = "trv@neomotic.com"
-    mensaje['To'] = "francisco.ramirez@neomotic.com"
+    smtp_user = st.secrets.get("SMTP_USER")
+    smtp_pass = st.secrets.get("SMTP_PASSWORD")
+    email_to = st.secrets.get("REPORTE_DIARIO_TO")
+
+    if not smtp_user or not smtp_pass or not email_to:
+        st.error("Faltan credenciales de correo en secrets: SMTP_USER, SMTP_PASSWORD, REPORTE_DIARIO_TO")
+        return
+
+    mensaje['From'] = smtp_user
+    mensaje['To'] = email_to
 
     
     retardos = len(df_hoy[df_hoy['estatus'].str.contains("Retardo|CRÍTICO", na=False)])
@@ -156,7 +182,7 @@ def enviar_reporte_diario(df_hoy):
     try:
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
-        server.login("trv@neomotic.com", "tibhlarouqepjzpu")
+        server.login(smtp_user, smtp_pass)
 
         server.send_message(mensaje)
         server.quit()
@@ -183,6 +209,10 @@ if 'registro_ok' not in st.session_state:
     st.session_state.registro_ok = False
 if 'ultimo_movimiento' not in st.session_state:
     st.session_state.ultimo_movimiento = ""
+if 'intentos_login' not in st.session_state:
+    st.session_state.intentos_login = 0
+if 'bloqueado_hasta' not in st.session_state:
+    st.session_state.bloqueado_hasta = None
 
 st.set_page_config(layout="wide")
 
@@ -196,18 +226,30 @@ if not st.session_state.user:
     nombre = st.text_input("Nombre")
     pin = st.text_input("PIN", type="password")
 
+    ahora_utc = datetime.utcnow()
+    bloqueado_hasta = st.session_state.bloqueado_hasta
+    if bloqueado_hasta and ahora_utc < bloqueado_hasta:
+        segundos_restantes = int((bloqueado_hasta - ahora_utc).total_seconds())
+        st.error(f"⛔ Demasiados intentos fallidos. Intenta de nuevo en {segundos_restantes} segundos.")
+        st.stop()
+
     if st.button("Ingresar"):
         res = supabase.table("empleados")\
             .select("*")\
             .eq("nombre", nombre)\
-            .eq("pin", pin)\
             .eq("activo", True)\
             .execute()
 
-        if res.data:
+        if res.data and validar_pin(res.data[0], pin):
             st.session_state.user = res.data[0]
+            st.session_state.intentos_login = 0
+            st.session_state.bloqueado_hasta = None
             st.rerun()
         else:
+            st.session_state.intentos_login += 1
+            if st.session_state.intentos_login >= 5:
+                st.session_state.bloqueado_hasta = datetime.utcnow() + timedelta(minutes=5)
+                st.session_state.intentos_login = 0
             st.error("❌ Datos incorrectos")
 
 
@@ -479,6 +521,7 @@ if user.get("rol") in ROLES_ADMIN:
     st.subheader("📊 Dashboard Ejecutivo")
 
     df = obtener_registros()
+    hoy = pd.DataFrame()
 
     if not df.empty:
 
@@ -558,70 +601,71 @@ if user.get("rol") in ROLES_ADMIN:
         enviar_reporte_diario(hoy)
 
 
-# =========================
-# 📦 GENERAR QR MASIVO (ADMIN)
-# =========================
-st.divider()
-st.subheader("📦 Generar QR de empleados")
-
-empleados = obtener_empleados()
-
-if empleados:
-
-    nombres_emp = [e['nombre'] for e in empleados]
-
-    st.info(f"Total empleados: {len(nombres_emp)}")
-
-    col1, col2 = st.columns(2)
-
+if user.get("rol") in ROLES_ADMIN:
     # =========================
-    # 🔹 DESCARGAR TODOS (ZIP)
+    # 📦 GENERAR QR MASIVO (ADMIN)
     # =========================
-    if col1.button("📦 Descargar todos los QR (ZIP)"):
+    st.divider()
+    st.subheader("📦 Generar QR de empleados")
 
-        zip_buffer = BytesIO()
+    empleados = obtener_empleados()
 
-        with zipfile.ZipFile(zip_buffer, "w") as z:
-            for emp in empleados:
-                qr = qrcode.make(emp['nombre'])
+    if empleados:
 
-                img_bytes = BytesIO()
-                qr.save(img_bytes, format='PNG')
+        nombres_emp = [e['nombre'] for e in empleados]
 
-                z.writestr(f"{emp['nombre']}.png", img_bytes.getvalue())
+        st.info(f"Total empleados: {len(nombres_emp)}")
 
-        st.download_button(
-            "⬇️ Descargar ZIP",
-            zip_buffer.getvalue(),
-            file_name="QR_Empleados.zip",
-            mime="application/zip"
-        )
+        col1, col2 = st.columns(2)
 
-    # =========================
-    # 🔹 QR INDIVIDUAL
-    # =========================
-    emp_sel = col2.selectbox("Selecciona empleado", nombres_emp)
+        # =========================
+        # 🔹 DESCARGAR TODOS (ZIP)
+        # =========================
+        if col1.button("📦 Descargar todos los QR (ZIP)"):
 
-    if emp_sel:
-        qr = qrcode.make(emp_sel)
-        img_bytes = BytesIO()
-        qr.save(img_bytes, format='PNG')
-        img_bytes.seek(0)
+            zip_buffer = BytesIO()
 
-        st.image(img_bytes, caption=f"QR de {emp_sel}")
+            with zipfile.ZipFile(zip_buffer, "w") as z:
+                for emp in empleados:
+                    qr = qrcode.make(emp['nombre'])
 
-        img_bytes = BytesIO()
-        qr.save(img_bytes, format='PNG')
-        img_bytes.seek(0)
+                    img_bytes = BytesIO()
+                    qr.save(img_bytes, format='PNG')
 
-        st.download_button(
-            "⬇️ Descargar QR individual",
-            img_bytes.getvalue(),
-            file_name=f"{emp_sel}.png",
-            mime="image/png"
-        )
+                    z.writestr(f"{emp['nombre']}.png", img_bytes.getvalue())
 
-else:
-    st.warning("No hay empleados registrados")
+            st.download_button(
+                "⬇️ Descargar ZIP",
+                zip_buffer.getvalue(),
+                file_name="QR_Empleados.zip",
+                mime="application/zip"
+            )
+
+        # =========================
+        # 🔹 QR INDIVIDUAL
+        # =========================
+        emp_sel = col2.selectbox("Selecciona empleado", nombres_emp)
+
+        if emp_sel:
+            qr = qrcode.make(emp_sel)
+            img_bytes = BytesIO()
+            qr.save(img_bytes, format='PNG')
+            img_bytes.seek(0)
+
+            st.image(img_bytes, caption=f"QR de {emp_sel}")
+
+            img_bytes = BytesIO()
+            qr.save(img_bytes, format='PNG')
+            img_bytes.seek(0)
+
+            st.download_button(
+                "⬇️ Descargar QR individual",
+                img_bytes.getvalue(),
+                file_name=f"{emp_sel}.png",
+                mime="image/png"
+            )
+
+    else:
+        st.warning("No hay empleados registrados")
 
 
