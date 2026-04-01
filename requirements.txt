@@ -11,3 +11,4 @@ supabase
 openpyxl
 streamlit-geolocation
 plotly
+git push -u origin work
