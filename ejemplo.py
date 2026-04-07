@@ -717,7 +717,21 @@ if user.get("rol") in ROLES_ADMIN:
                 st.info("No hay coordenadas registradas todavía.")
 
         presentes = hoy['empleado'].unique()
-        faltantes = [e['nombre'] for e in empleados if e['nombre'] not in presentes]
+        # Fallback robusto por si se reordena UI y alguna variable queda fuera de alcance.
+        try:
+            empleados_ref = empleados
+        except NameError:
+            empleados_ref = obtener_empleados()
+            
+        try:
+            presentes_ref = set(presentes)
+        except NameError:
+            presentes_ref = set()
+
+        faltantes = [e.get('nombre')
+            for e in (empleados_ref or [])
+            if e.get('nombre') and e.get('nombre') not in presentes_ref
+        ]
         st.metric("Faltantes hoy", len(faltantes))
         
         st.subheader("🚫 Faltantes")
