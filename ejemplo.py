@@ -639,14 +639,16 @@ if user.get("rol") in ROLES_ADMIN:
         c1.metric("Registros hoy", len(hoy))
         c2.metric("Retardos", len(hoy[hoy['estatus'].str.contains("Retardo|CRÍTICO", case=False, na=False)]))
         c3.metric("Salidas anticipadas", len(hoy[hoy['estatus']=="SALIDA ANTICIPADA"]))
-        c4, c5 = st.columns(2)
+        c4, c5, c6 = st.columns(3)
         empleados_hoy = hoy['empleado'].nunique() if 'empleado' in hoy.columns else 0
         total_empleados = len(obtener_empleados())
         puntual = len(hoy[hoy['estatus'] == "A Tiempo"])
         puntualidad_pct = (puntual / len(hoy) * 100) if len(hoy) else 0
         cobertura_pct = (empleados_hoy / total_empleados * 100) if total_empleados else 0
+        faltantes = [e['nombre'] for e in empleados if e['nombre'] not in presentes]
         c4.metric("Puntualidad", f"{puntualidad_pct:.1f}%")
         c5.metric("Cobertura (presentes/empleados)", f"{cobertura_pct:.1f}%")
+        c6.metric("Faltantes hoy", len(faltantes))
 
         st.dataframe(hoy.sort_values("fecha_hora", ascending=False))
 
@@ -718,9 +720,6 @@ if user.get("rol") in ROLES_ADMIN:
 
         empleados = obtener_empleados()
         presentes = hoy['empleado'].unique()
-
-        faltantes = [e['nombre'] for e in empleados if e['nombre'] not in presentes]
-        st.metric("Faltantes hoy", len(faltantes))
         
         st.subheader("🚫 Faltantes")
         for f in faltantes:
