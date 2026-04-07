@@ -92,6 +92,25 @@ def obtener_registros():
 def obtener_empleados():
     return supabase.table("empleados").select("*").execute().data
 
+def obtener_sucursales_catalogo():
+    data = supabase.table("sucursales").select("id,nombre").execute().data
+    df = pd.DataFrame(data if data else [])
+    if df.empty:
+        return df
+    df["id"] = df["id"].astype(str)
+    return df
+
+def enriquecer_con_nombre_sucursal(df):
+    if df.empty or "sucursal_id" not in df.columns:
+        return df
+    cat = obtener_sucursales_catalogo()
+    if cat.empty:
+        return df
+    out = df.copy()
+    out["sucursal_id"] = out["sucursal_id"].astype(str)
+    out = out.merge(cat.rename(columns={"id": "sucursal_id", "nombre": "sucursal_nombre"}), on="sucursal_id", how="left")
+    return out
+
 def obtener_timezone_sucursal(sucursal_id):
     try:
         suc = supabase.table("sucursales").select("timezone").eq("id", sucursal_id).execute().data
@@ -149,11 +168,10 @@ def validar_pin(empleado, pin_input):
         return False
     return hmac.compare_digest(str(pin_legacy), pin_input)
 
-
 # =========================
 #🧾 EXPORTACIÓN EXCEL
 # =========================
-def exportar_excel(df):
+def exportar_excel(df, file_name="reporte_asistencia.xlsx"):
 
     output = BytesIO()
     df.to_excel(output, index=False)
@@ -162,7 +180,7 @@ def exportar_excel(df):
     st.download_button(
         "⬇️ Descargar Excel",
         data=output.getvalue(),
-        file_name="reporte_asistencia.xlsx",
+        file_name=file_name,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
@@ -174,6 +192,8 @@ def enviar_reporte_diario(df_hoy):
     if df_hoy.empty:
         st.warning("No hay registros hoy")
         return
+        
+    df_hoy = enriquecer_con_nombre_sucursal(df_hoy)    
 
     # 📊 Excel de HOY + pestañas por sucursal
     output = BytesIO()
@@ -181,7 +201,8 @@ def enviar_reporte_diario(df_hoy):
         df_hoy.to_excel(writer, index=False, sheet_name="Resumen")
         if "sucursal_id" in df_hoy.columns:
             for suc_id, grp in df_hoy.groupby("sucursal_id", dropna=False):
-                hoja = f"Suc_{str(suc_id)[:25]}"
+                suc_nombre = str(grp["sucursal_nombre"].iloc[0]) if "sucursal_nombre" in grp.columns and pd.notna(grp["sucursal_nombre"].iloc[0]) else f"Suc_{suc_id}"
+                hoja = suc_nombre[:31]
                 grp.to_excel(writer, index=False, sheet_name=hoja)
     output.seek(0)
 
@@ -749,7 +770,22 @@ if user.get("rol") in ROLES_ADMIN:
     # 🧾 EXPORTAR
     # =========================
     st.subheader("🧾 Exportar datos")
-    exportar_excel(df)
+    if not df.empty:
+        min_fecha = df['fecha_hora'].dt.date.min()
+        max_fecha = df['fecha_hora'].dt.date.max()
+        fecha_exportar = st.date_input(
+            "Fecha a exportar",
+            value=max_fecha,
+            min_value=min_fecha,
+            max_value=max_fecha,
+            key="fecha_exportar_admin"
+        )
+        df_export = df[df['fecha_hora'].dt.date == fecha_exportar].copy()
+        df_export = enriquecer_con_nombre_sucursal(df_export)
+        st.caption(f"Registros para exportar ({fecha_exportar}): {len(df_export)}")
+        exportar_excel(df_export, file_name=f"reporte_asistencia_{fecha_exportar}.xlsx")
+    else:
+        st.info("No hay datos para exportar todavía.")
     
     # 📧 BOTÓN DE ALERTA
     if st.button("📧 Enviar reporte diario"):
