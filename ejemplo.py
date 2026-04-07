@@ -192,7 +192,7 @@ def enviar_reporte_diario(df_hoy):
     mensaje['To'] = email_to
 
     retardos = len(df_hoy[df_hoy['estatus'].str.contains("Retardo|CRÍTICO", case=False, na=False)])
-    faltas = "a futuro"
+    faltas = len(faltas)
     total_registros = len(df_hoy)
     detalle_sucursal = ""
     if "sucursal_id" in df_hoy.columns:
