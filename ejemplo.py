@@ -213,6 +213,9 @@ def enviar_reporte_diario(df_hoy):
     smtp_user = st.secrets.get("SMTP_USER")
     smtp_pass = st.secrets.get("SMTP_PASSWORD")
     email_to = st.secrets.get("REPORTE_DIARIO_TO")
+    email_cc_raw = st.secrets.get("REPORTE_DIARIO_CC", "")
+
+    cc_list = [x.strip() for x in str(email_cc_raw).split(",") if x.strip()]
 
     if not smtp_user or not smtp_pass or not email_to:
         st.error("Faltan credenciales de correo en secrets: SMTP_USER, SMTP_PASSWORD, REPORTE_DIARIO_TO")
@@ -220,6 +223,7 @@ def enviar_reporte_diario(df_hoy):
 
     mensaje['From'] = smtp_user
     mensaje['To'] = email_to
+    mensaje['Cc'] = ", ".join(cc_list)
 
     retardos = len(df_hoy[df_hoy['estatus'].str.contains("Retardo|CRÍTICO", case=False, na=False)])
     faltas = 0
@@ -302,6 +306,10 @@ if 'ultima_geo' not in st.session_state:
     st.session_state.ultima_geo = None
 if 'requiere_registro_post_justificacion' not in st.session_state:
     st.session_state.requiere_registro_post_justificacion = False
+if 'ultimo_reporte_status' not in st.session_state:
+    st.session_state.ultimo_reporte_status = "Sin envío hoy"
+if 'ultimo_reporte_hora' not in st.session_state:
+    st.session_state.ultimo_reporte_hora = None
 
 st.set_page_config(layout="wide")
 
@@ -310,7 +318,7 @@ st.set_page_config(layout="wide")
 # =========================
 if not st.session_state.user:
 
-    st.title("🏢 NEOMOTIC Access PRO")
+    st.title("🏢 neoAccess PRO")
 
     nombre = st.text_input("Nombre")
     pin = st.text_input("PIN", type="password")
@@ -766,11 +774,12 @@ if user.get("rol") in ROLES_ADMIN:
         ahora = datetime.now(zona_usuario)
         hora_actual = ahora.strftime("%H:%M")
         fecha_hoy = ahora.date()
-
-        if hora_actual == "19:15":
-            if st.session_state.get("fecha_reporte") != fecha_hoy:
-                enviar_reporte_diario(hoy)
-                st.session_state.fecha_reporte = fecha_hoy
+        hora_objetivo = datetime.strptime("19:15", "%H:%M").time()
+        if ahora.time() >= hora_objetivo and st.session_state.get("fecha_reporte") != fecha_hoy:
+             ok_mail, hora_mail = enviar_reporte_diario(hoy)
+             st.session_state.fecha_reporte = fecha_hoy
+             st.session_state.ultimo_reporte_status = "✅ Enviado" if ok_mail else "❌ Error al enviar"
+             st.session_state.ultimo_reporte_hora = hora_mail.strftime("%Y-%m-%d %H:%M:%S") if hora_mail else None
 
     # =========================
     # 🧾 EXPORTAR
@@ -779,23 +788,51 @@ if user.get("rol") in ROLES_ADMIN:
     if not df.empty:
         min_fecha = df['fecha_hora'].dt.date.min()
         max_fecha = df['fecha_hora'].dt.date.max()
-        fecha_exportar = st.date_input(
-            "Fecha a exportar",
+        col_f1, col_f2 = st.columns(2)
+        fecha_inicio = col_f1.date_input(
+            "Fecha inicio",
             value=max_fecha,
             min_value=min_fecha,
             max_value=max_fecha,
-            key="fecha_exportar_admin"
+            key="fecha_inicio_export_admin"
         )
-        df_export = df[df['fecha_hora'].dt.date == fecha_exportar].copy()
+        fecha_fin = col_f2.date_input(
+            "Fecha fin",
+            value=max_fecha,
+            min_value=min_fecha,
+            max_value=max_fecha,
+            key="fecha_fin_export_admin"
+        )
+
+        if fecha_inicio > fecha_fin:
+            st.warning("La fecha inicio no puede ser mayor que la fecha fin.")
+            fecha_inicio, fecha_fin = fecha_fin, fecha_inicio
+
+        sucursales_cat = obtener_sucursales_catalogo()
+        opciones_sucursal = ["Todas"] + (sucursales_cat["nombre"].dropna().tolist() if not sucursales_cat.empty else [])
+        sucursal_sel = st.selectbox("Sucursal a exportar", opciones_sucursal, key="sucursal_export_admin")
+
+        mask_rango = (df['fecha_hora'].dt.date >= fecha_inicio) & (df['fecha_hora'].dt.date <= fecha_fin)
+        df_export = df[mask_rango].copy()
         df_export = enriquecer_con_nombre_sucursal(df_export)
-        st.caption(f"Registros para exportar ({fecha_exportar}): {len(df_export)}")
-        exportar_excel(df_export, file_name=f"reporte_asistencia_{fecha_exportar}.xlsx")
+        if sucursal_sel != "Todas" and "sucursal_nombre" in df_export.columns:
+            df_export = df_export[df_export["sucursal_nombre"] == sucursal_sel]
+
+        st.caption(f"Registros para exportar ({fecha_inicio} a {fecha_fin}, {sucursal_sel}): {len(df_export)}")
+        exportar_excel(df_export, file_name=f"reporte_asistencia_{fecha_inicio}_a_{fecha_fin}.xlsx")
     else:
         st.info("No hay datos para exportar todavía.")
     
     # 📧 BOTÓN DE ALERTA
     if st.button("📧 Enviar reporte diario"):
-        enviar_reporte_diario(hoy)
+        ok_mail, hora_mail = enviar_reporte_diario(hoy)
+        st.session_state.ultimo_reporte_status = "✅ Enviado manual" if ok_mail else "❌ Error al enviar manual"
+        st.session_state.ultimo_reporte_hora = hora_mail.strftime("%Y-%m-%d %H:%M:%S") if hora_mail else None
+
+    st.info(
+        f"Estado correo automático/manual: {st.session_state.get('ultimo_reporte_status', 'Sin envío')}"
+        + (f" | Hora: {st.session_state.get('ultimo_reporte_hora')}" if st.session_state.get("ultimo_reporte_hora") else "")
+    )
 
 if user.get("rol") in ROLES_ADMIN:
     # =========================
