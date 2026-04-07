@@ -276,10 +276,25 @@ def enviar_reporte_diario(df_hoy):
         server.send_message(mensaje)
         server.quit()
 
-        st.success("📧 Reporte diario enviado correctamente")
+        hora_envio = datetime.now(zona_usuario)
+
+        st.success(f"📧 Reporte diario enviado correctamente ({hora_envio.strftime('%Y-%m-%d %H:%M:%S')})")
+        return True, hora_envio
 
     except Exception as e:
         st.error(f"Error correo: {e}")
+        return False, None
+
+def normalizar_resultado_envio(resultado):
+    """
+    Compatibilidad: si alguna versión previa regresa bool o None
+    en lugar de (ok, hora), evitamos TypeError al desempaquetar.
+    """
+    if isinstance(resultado, tuple) and len(resultado) == 2:
+        return resultado
+    if isinstance(resultado, bool):
+        return resultado, None
+    return False, None
 
 # =========================
 # 🔐 SESSION
@@ -775,12 +790,13 @@ if user.get("rol") in ROLES_ADMIN:
         hora_actual = ahora.strftime("%H:%M")
         fecha_hoy = ahora.date()
         hora_objetivo = datetime.strptime("19:15", "%H:%M").time()
-        if ahora.time() >= hora_objetivo and st.session_state.get("fecha_reporte") != fecha_hoy:
-             ok_mail, hora_mail = enviar_reporte_diario(hoy)
-             st.session_state.fecha_reporte = fecha_hoy
-             st.session_state.ultimo_reporte_status = "✅ Enviado" if ok_mail else "❌ Error al enviar"
-             st.session_state.ultimo_reporte_hora = hora_mail.strftime("%Y-%m-%d %H:%M:%S") if hora_mail else None
 
+     if ahora.time() >= hora_objetivo and st.session_state.get("fecha_reporte") != fecha_hoy:
+            ok_mail, hora_mail = normalizar_resultado_envio(enviar_reporte_diario(hoy))
+            st.session_state.fecha_reporte = fecha_hoy
+            st.session_state.ultimo_reporte_status = "✅ Enviado" if ok_mail else "❌ Error al enviar"
+            st.session_state.ultimo_reporte_hora = hora_mail.strftime("%Y-%m-%d %H:%M:%S") if hora_mail else None
+         
     # =========================
     # 🧾 EXPORTAR
     # =========================
@@ -825,14 +841,14 @@ if user.get("rol") in ROLES_ADMIN:
     
     # 📧 BOTÓN DE ALERTA
     if st.button("📧 Enviar reporte diario"):
-        ok_mail, hora_mail = enviar_reporte_diario(hoy)
-        st.session_state.ultimo_reporte_status = "✅ Enviado manual" if ok_mail else "❌ Error al enviar manual"
-        st.session_state.ultimo_reporte_hora = hora_mail.strftime("%Y-%m-%d %H:%M:%S") if hora_mail else None
-
-    st.info(
-        f"Estado correo automático/manual: {st.session_state.get('ultimo_reporte_status', 'Sin envío')}"
-        + (f" | Hora: {st.session_state.get('ultimo_reporte_hora')}" if st.session_state.get("ultimo_reporte_hora") else "")
-    )
+            ok_mail, hora_mail = normalizar_resultado_envio(enviar_reporte_diario(hoy))
+            st.session_state.ultimo_reporte_status = "✅ Enviado manual" if ok_mail else "❌ Error al enviar manual"
+            st.session_state.ultimo_reporte_hora = hora_mail.strftime("%Y-%m-%d %H:%M:%S") if hora_mail else None
+    
+        st.info(
+            f"Estado correo automático/manual: {st.session_state.get('ultimo_reporte_status', 'Sin envío')}"
+            + (f" | Hora: {st.session_state.get('ultimo_reporte_hora')}" if st.session_state.get("ultimo_reporte_hora") else "")
+        )
 
 if user.get("rol") in ROLES_ADMIN:
     # =========================
