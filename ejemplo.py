@@ -845,10 +845,10 @@ if user.get("rol") in ROLES_ADMIN:
             st.session_state.ultimo_reporte_status = "✅ Enviado manual" if ok_mail else "❌ Error al enviar manual"
             st.session_state.ultimo_reporte_hora = hora_mail.strftime("%Y-%m-%d %H:%M:%S") if hora_mail else None
     
-        st.info(
-            f"Estado correo automático/manual: {st.session_state.get('ultimo_reporte_status', 'Sin envío')}"
-            + (f" | Hora: {st.session_state.get('ultimo_reporte_hora')}" if st.session_state.get("ultimo_reporte_hora") else "")
-        )
+            st.info(
+                f"Estado correo automático/manual: {st.session_state.get('ultimo_reporte_status', 'Sin envío')}"
+                + (f" | Hora: {st.session_state.get('ultimo_reporte_hora')}" if st.session_state.get("ultimo_reporte_hora") else "")
+            )
 
 if user.get("rol") in ROLES_ADMIN:
     # =========================
