@@ -192,14 +192,14 @@ def enviar_reporte_diario(df_hoy):
     mensaje['To'] = email_to
 
     retardos = len(df_hoy[df_hoy['estatus'].str.contains("Retardo|CRÍTICO", case=False, na=False)])
-        faltas = "a futuro"
-        total_registros = len(df_hoy)
-        detalle_sucursal = ""
-        if "sucursal_id" in df_hoy.columns:
-            corte = df_hoy.groupby("sucursal_id").size().reset_index(name="registros")
-            detalle_sucursal = "\n".join(
-                [f"• Sucursal {row['sucursal_id']}: {row['registros']} registros" for _, row in corte.iterrows()]
-            )
+    faltas = "a futuro"
+    total_registros = len(df_hoy)
+    detalle_sucursal = ""
+    if "sucursal_id" in df_hoy.columns:
+        corte = df_hoy.groupby("sucursal_id").size().reset_index(name="registros")
+        detalle_sucursal = "\n".join(
+        [f"• Sucursal {row['sucursal_id']}: {row['registros']} registros" for _, row in corte.iterrows()]
+        )
     
     mensaje.attach(MIMEText("Buena tarde,\n\n"
                             "Se adjunta el reporte diario de asistencia." 
