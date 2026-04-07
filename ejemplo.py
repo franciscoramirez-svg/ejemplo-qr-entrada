@@ -657,34 +657,32 @@ if user.get("rol") in ROLES_ADMIN:
         
         col2.plotly_chart(fig2, use_container_width=True)
 
-
         st.subheader("🗺️ Ubicaciones")
         pts = hoy.dropna(subset=['lat','lon'])
         if not pts.empty:
             sucursales = pd.DataFrame(supabase.table("sucursales").select("id,lat,lon,nombre").execute().data)
             if not sucursales.empty:
-                fig_map = go.Figure()
-                fig_map.add_trace(go.Scattermapbox(
-                    lat=pts['lat'],
-                    lon=pts['lon'],
-                    mode='markers',
-                    marker=dict(size=9, color="#00BFFF"),
-                    text=pts.get('empleado', None),
-                    name="Registros"
-                ))
-                fig_map.add_trace(go.Scattermapbox(
-                    lat=sucursales['lat'],
-                    lon=sucursales['lon'],
-                    mode='markers',
-                    marker=dict(size=14, color="red"),
-                    text=sucursales.get('nombre', sucursales['id']),
-                    name="Sucursales"
-                ))
-                fig_map.update_layout(
-                    mapbox_style="open-street-map",
-                    margin={"l":0,"r":0,"t":0,"b":0},
-                    height=420
+                pts_map = pts[['lat', 'lon']].copy()
+                pts_map['etiqueta'] = pts.get('empleado', 'Registro')
+                pts_map['tipo_punto'] = 'Registro'
+
+                suc_map = sucursales[['lat', 'lon']].copy()
+                suc_map['etiqueta'] = sucursales.get('nombre', sucursales['id']).astype(str)
+                suc_map['tipo_punto'] = 'Sucursal'
+
+                mix = pd.concat([pts_map, suc_map], ignore_index=True)
+
+                fig_map = px.scatter_map(
+                    mix,
+                    lat='lat',
+                    lon='lon',
+                    color='tipo_punto',
+                    hover_name='etiqueta',
+                    zoom=4,
+                    height=420,
+                    color_discrete_map={'Registro': '#00BFFF', 'Sucursal': 'red'}
                 )
+                fig_map.update_layout(margin={"l": 0, "r": 0, "t": 0, "b": 0})
                 st.plotly_chart(fig_map, use_container_width=True)
             else:
                 st.map(pts)
@@ -695,6 +693,7 @@ if user.get("rol") in ROLES_ADMIN:
                 st.map(ultimos[['lat', 'lon']])
             else:
                 st.info("No hay coordenadas registradas todavía.")
+
 
         empleados = obtener_empleados()
         presentes = hoy['empleado'].unique()
