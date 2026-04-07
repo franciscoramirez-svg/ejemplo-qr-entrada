@@ -205,7 +205,7 @@ def enviar_reporte_diario(df_hoy):
     try:
         empleados = obtener_empleados()
         presentes = set(df_hoy['empleado'].dropna().unique())
-         faltas = len([e for e in empleados if e.get('nombre') not in presentes])
+        faltas = len([e for e in empleados if e.get('nombre') not in presentes])
     except Exception:
         faltas = 0
     total_registros = len(df_hoy)
