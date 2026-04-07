@@ -232,10 +232,16 @@ def enviar_reporte_diario(df_hoy):
     total_registros = len(df_hoy)
     detalle_sucursal = ""
     if "sucursal_id" in df_hoy.columns:
-        corte = df_hoy.groupby("sucursal_id").size().reset_index(name="registros")
-        detalle_sucursal = "\n".join(
-        [f"• Sucursal {row['sucursal_id']}: {row['registros']} registros" for _, row in corte.iterrows()]
-        )
+        if "sucursal_nombre" in df_hoy.columns:
+            corte = df_hoy.groupby("sucursal_nombre").size().reset_index(name="registros")
+            detalle_sucursal = "\n".join(
+                [f"• {row['sucursal_nombre']}: {row['registros']} registros" for _, row in corte.iterrows()]
+            )
+        else:
+            corte = df_hoy.groupby("sucursal_id").size().reset_index(name="registros")
+            detalle_sucursal = "\n".join(
+                [f"• Sucursal {row['sucursal_id']}: {row['registros']} registros" for _, row in corte.iterrows()]
+            )
     
     mensaje.attach(MIMEText("Buena tarde,\n\n"
                             "Se adjunta el reporte diario de asistencia." 
