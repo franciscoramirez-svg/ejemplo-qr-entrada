@@ -188,7 +188,7 @@ def enviar_reporte_diario(df_hoy):
     hoy_str = datetime.now(zona).strftime("%Y-%m-%d")
 
     mensaje = MIMEMultipart()
-    mensaje['Subject'] = f"📊 Reporte Diario de Asistencia - TRV - {hoy_str}"
+    mensaje['Subject'] = f"📊 Reporte Diario de Asistencia - {hoy_str}"
     smtp_user = st.secrets.get("SMTP_USER")
     smtp_pass = st.secrets.get("SMTP_PASSWORD")
     email_to = st.secrets.get("REPORTE_DIARIO_TO")
