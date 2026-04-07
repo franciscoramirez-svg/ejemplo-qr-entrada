@@ -87,7 +87,7 @@ def validar_geocerca(lat, lon, sucursal_id):
 # =========================
 def obtener_registros():
     return pd.DataFrame(supabase.table("registros").select("*").execute().data)
-    def obtener_empleados():
+def obtener_empleados():
     return supabase.table("empleados").select("*").execute().data
 
 def existe_registro_duplicado(nombre, tipo, ahora, ventana_min=2):
