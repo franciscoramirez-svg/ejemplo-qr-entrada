@@ -13,6 +13,7 @@ import smtplib
 from email.mime.text import MIMEText
 from streamlit_js_eval import get_geolocation
 import plotly.express as px
+import plotly.graph_objects as go
 import time
 import hashlib
 import hmac
@@ -87,8 +88,18 @@ def validar_geocerca(lat, lon, sucursal_id):
 # =========================
 def obtener_registros():
     return pd.DataFrame(supabase.table("registros").select("*").execute().data)
+    
 def obtener_empleados():
     return supabase.table("empleados").select("*").execute().data
+
+def obtener_timezone_sucursal(sucursal_id):
+    try:
+        suc = supabase.table("sucursales").select("timezone").eq("id", sucursal_id).execute().data
+        if suc and suc[0].get("timezone"):
+            return str(suc[0]["timezone"])
+    except Exception:
+        pass
+    return "America/Mexico_City"
 
 def existe_registro_duplicado(nombre, tipo, ahora, ventana_min=2):
     """
@@ -176,12 +187,10 @@ def enviar_reporte_diario(df_hoy):
 
     hoy_str = datetime.now(zona).strftime("%Y-%m-%d")
 
-
     mensaje = MIMEMultipart()
     mensaje['Subject'] = f"📊 Reporte Diario de Asistencia - TRV - {hoy_str}"
     smtp_user = st.secrets.get("SMTP_USER")
     smtp_pass = st.secrets.get("SMTP_PASSWORD")
-
     email_to = st.secrets.get("REPORTE_DIARIO_TO")
 
     if not smtp_user or not smtp_pass or not email_to:
@@ -192,7 +201,13 @@ def enviar_reporte_diario(df_hoy):
     mensaje['To'] = email_to
 
     retardos = len(df_hoy[df_hoy['estatus'].str.contains("Retardo|CRÍTICO", case=False, na=False)])
-    faltas = len(faltas)
+    faltas = 0
+    try:
+        empleados = obtener_empleados()
+        presentes = set(df_hoy['empleado'].dropna().unique())
+         faltas = len([e for e in empleados if e.get('nombre') not in presentes])
+    except Exception:
+        faltas = 0
     total_registros = len(df_hoy)
     detalle_sucursal = ""
     if "sucursal_id" in df_hoy.columns:
@@ -207,12 +222,12 @@ def enviar_reporte_diario(df_hoy):
                             f"📝 Total registros: {total_registros}\n"
                             f"⏰ Retardos: {retardos}\n"
                             f"🚫 Faltantes: {faltas}\n"
+                            f"\n"
                             f"📍 Detalle por sucursal:\n{detalle_sucursal if detalle_sucursal else 'Sin dato de sucursal'}\n"
                             f"\n"
                             f"Sistema neoACCESS PRO"
     ))
     
-
     part = MIMEBase('application', 'octet-stream')
     part.set_payload(output.getvalue())
     encoders.encode_base64(part)
@@ -222,7 +237,6 @@ def enviar_reporte_diario(df_hoy):
     )
 
     mensaje.attach(part)
-
     try:
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
@@ -313,14 +327,21 @@ if not user:
     
 # 🚨 VALIDACIÓN DE SUCURSAL
 if not user.get("sucursal_id"):
-    st.error("🚫 No tienes sucursal asignada. Contacta a administración.")
+    st.error("🚫 No tienes sucursal asignada. Contacta a administración/Supervisor.")
     st.stop()
+
+tz_sucursal_str = obtener_timezone_sucursal(user.get("sucursal_id"))
+try:
+    zona_usuario = pytz.timezone(tz_sucursal_str)
+except Exception:
+    tz_sucursal_str = "America/Mexico_City"
+    zona_usuario = pytz.timezone(tz_sucursal_str)
     
 # 🔥 FIX ADMIN NO BLOQUEADO
 if user.get("rol") in ROLES_ADMIN:
     st.session_state.registro_ok = False
 
-st.title("🏢 NEOMOTIC Access PRO")
+st.title("🏢 neoAccess PRO")
 st.success(f"👤 {user['nombre']} | {user.get('rol','empleado')}")
 
 # =========================
@@ -358,7 +379,7 @@ def validar_flujo(nombre, tipo):
     df['fecha_hora'] = pd.to_datetime(df['fecha_hora'], errors='coerce')
     df = df.dropna(subset=['fecha_hora'])
 
-    hoy = date.today()
+    hoy = datetime.now(zona_usuario).date()
     ayer = hoy - timedelta(days=1)
 
     if tipo == "Salida":
@@ -375,6 +396,7 @@ def validar_flujo(nombre, tipo):
         
             st.session_state.justificar = True
             st.session_state.registro_id = reg_ayer['id']  # 🔥 AQUÍ LA CLAVE
+            st.session_state.requiere_registro_post_justificacion = True
         
             return True, "⚠️ Falta salida de ayer, se requerirá justificación"
 
@@ -402,7 +424,7 @@ def registrar(nombre, tipo):
         st.error(msg)
         return
 
-    ahora = datetime.now(zona)
+    ahora = datetime.now(zona_usuario)
 
     loc = st.session_state.get("ultima_geo")
     
@@ -432,8 +454,8 @@ def registrar(nombre, tipo):
 
     if tipo == "Entrada":
         h_lim = datetime.strptime(HORA_ENTRADA, "%H:%M:%S").time()
-        diff = (datetime.combine(date.today(), ahora.time()) -
-                datetime.combine(date.today(), h_lim)).total_seconds() / 60
+        diff = (datetime.combine(ahora.date(), ahora.time()) -
+                datetime.combine(ahora.date(), h_lim)).total_seconds() / 60
 
         min_r = max(0, int(diff))
 
@@ -531,7 +553,7 @@ box-shadow: 0 0 18px rgba(0,229,255,.35); margin-bottom:12px;">
 <script>
 function tick(){{
   const now = new Date();
-  const fmt = now.toLocaleTimeString('es-MX', {{hour12:false,timeZone:'America/Mexico_City'}});
+  const fmt = now.toLocaleTimeString('es-MX', {{hour12:false,timeZone:'{tz_sucursal_str}'}});
   document.getElementById('neoClock').innerText = fmt;
 }}
 setInterval(tick, 1000); tick();
@@ -611,7 +633,7 @@ if user.get("rol") in ROLES_ADMIN:
         df['fecha_hora'] = pd.to_datetime(df['fecha_hora'], errors='coerce')
         df = df.dropna(subset=['fecha_hora'])
 
-        hoy = df[df['fecha_hora'].dt.date == datetime.now().date()]
+        hoy = df[df['fecha_hora'].dt.date == datetime.now(zona_usuario).date()]
 
         c1, c2, c3 = st.columns(3)
         c1.metric("Registros hoy", len(hoy))
@@ -694,17 +716,17 @@ if user.get("rol") in ROLES_ADMIN:
             else:
                 st.info("No hay coordenadas registradas todavía.")
 
-
         empleados = obtener_empleados()
         presentes = hoy['empleado'].unique()
 
         faltantes = [e['nombre'] for e in empleados if e['nombre'] not in presentes]
-
+        st.metric("Faltantes hoy", len(faltantes))
+        
         st.subheader("🚫 Faltantes")
         for f in faltantes:
             st.error(f)
         
-        ahora = datetime.now(zona)
+        ahora = datetime.now(zona_usuario)
         hora_actual = ahora.strftime("%H:%M")
         fecha_hoy = ahora.date()
 
