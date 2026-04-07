@@ -791,7 +791,7 @@ if user.get("rol") in ROLES_ADMIN:
         fecha_hoy = ahora.date()
         hora_objetivo = datetime.strptime("19:15", "%H:%M").time()
 
-     if ahora.time() >= hora_objetivo and st.session_state.get("fecha_reporte") != fecha_hoy:
+    if ahora.time() >= hora_objetivo and st.session_state.get("fecha_reporte") != fecha_hoy:
             ok_mail, hora_mail = normalizar_resultado_envio(enviar_reporte_diario(hoy))
             st.session_state.fecha_reporte = fecha_hoy
             st.session_state.ultimo_reporte_status = "✅ Enviado" if ok_mail else "❌ Error al enviar"
