@@ -645,6 +645,20 @@ if user.get("rol") in ROLES_ADMIN:
         puntual = len(hoy[hoy['estatus'] == "A Tiempo"])
         puntualidad_pct = (puntual / len(hoy) * 100) if len(hoy) else 0
         cobertura_pct = (empleados_hoy / total_empleados * 100) if total_empleados else 0
+          # Fallback robusto por si se reordena UI y alguna variable queda fuera de alcance.
+        presentes = hoy['empleado'].unique()
+        try:
+            empleados_ref = empleados
+        except NameError:
+            empleados_ref = obtener_empleados()
+        try:
+            presentes_ref = set(presentes)
+        except NameError:
+            presentes_ref = set()
+        faltantes = [e.get('nombre')
+            for e in (empleados_ref or [])
+            if e.get('nombre') and e.get('nombre') not in presentes_ref
+        ]
         c4.metric("Puntualidad", f"{puntualidad_pct:.1f}%")
         c5.metric("Cobertura (presentes/empleados)", f"{cobertura_pct:.1f}%")
         c6.metric("Faltantes hoy", len(faltantes))
@@ -716,23 +730,6 @@ if user.get("rol") in ROLES_ADMIN:
                 st.map(ultimos[['lat', 'lon']])
             else:
                 st.info("No hay coordenadas registradas todavía.")
-
-        presentes = hoy['empleado'].unique()
-        # Fallback robusto por si se reordena UI y alguna variable queda fuera de alcance.
-        try:
-            empleados_ref = empleados
-        except NameError:
-            empleados_ref = obtener_empleados()
-            
-        try:
-            presentes_ref = set(presentes)
-        except NameError:
-            presentes_ref = set()
-
-        faltantes = [e.get('nombre')
-            for e in (empleados_ref or [])
-            if e.get('nombre') and e.get('nombre') not in presentes_ref
-        ]
 
         
         st.subheader("🚫 Faltantes")
