@@ -1,0 +1,35 @@
+name: Envio reporte diario
+
+on:
+  schedule:
+    # 01:15 UTC ~= 19:15 America/Mexico_City (UTC-6)
+    - cron: '15 1 * * *'
+  workflow_dispatch:
+
+jobs:
+  enviar-reporte:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Ejecutar envío diario
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          REPORTE_DIARIO_TO: ${{ secrets.REPORTE_DIARIO_TO }}
+          REPORTE_DIARIO_CC: ${{ secrets.REPORTE_DIARIO_CC }}
+          REPORTE_TIMEZONE: America/Mexico_City
+        run: python cron_enviar_reporte.py
