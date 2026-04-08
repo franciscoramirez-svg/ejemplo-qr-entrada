@@ -13,9 +13,11 @@ import smtplib
 from email.mime.text import MIMEText
 from streamlit_js_eval import get_geolocation
 import plotly.express as px
+import plotly.graph_objects as go
 import time
 import hashlib
 import hmac
+import streamlit.components.v1 as components
 
 
 # =========================
@@ -88,6 +90,38 @@ def obtener_registros():
 def obtener_empleados():
     return supabase.table("empleados").select("*").execute().data
 
+def existe_registro_duplicado(nombre, tipo, ahora, ventana_min=2):
+    """
+    Evita doble click o reintentos involuntarios:
+    no permite mismo tipo para el mismo empleado dentro de una ventana corta.
+    """
+    df = obtener_registros()
+    if df.empty:
+        return False
+
+    df['fecha_hora'] = pd.to_datetime(df['fecha_hora'], errors='coerce')
+    df = df.dropna(subset=['fecha_hora'])
+    if df.empty:
+        return False
+
+    hoy = ahora.date()
+    cand = df[
+        (df['empleado'] == nombre) &
+        (df['tipo'] == tipo) &
+        (df['fecha_hora'].dt.date == hoy)
+    ]
+    if cand.empty:
+        return False
+
+    ultimo = cand.sort_values('fecha_hora').iloc[-1]['fecha_hora']
+    if hasattr(ultimo, "tzinfo") and ultimo.tzinfo is not None:
+        ultimo = ultimo.tz_convert(zona).to_pydatetime().replace(tzinfo=None)
+    else:
+        ultimo = pd.Timestamp(ultimo).to_pydatetime()
+
+    delta_min = abs((ahora.replace(tzinfo=None) - ultimo).total_seconds() / 60)
+    return delta_min <= ventana_min
+
 def validar_pin(empleado, pin_input):
     """
     Soporta transición de PIN en texto plano a hash SHA-256:
@@ -129,9 +163,14 @@ def enviar_reporte_diario(df_hoy):
         st.warning("No hay registros hoy")
         return
 
-    # 📊 Excel solo de HOY
+    # 📊 Excel de HOY + pestañas por sucursal
     output = BytesIO()
-    df_hoy.to_excel(output, index=False)
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        df_hoy.to_excel(writer, index=False, sheet_name="Resumen")
+        if "sucursal_id" in df_hoy.columns:
+            for suc_id, grp in df_hoy.groupby("sucursal_id", dropna=False):
+                hoja = f"Suc_{str(suc_id)[:25]}"
+                grp.to_excel(writer, index=False, sheet_name=hoja)
     output.seek(0)
 
     hoy_str = datetime.now(zona).strftime("%Y-%m-%d")
@@ -154,9 +193,15 @@ def enviar_reporte_diario(df_hoy):
     mensaje['To'] = email_to
 
     
-    retardos = len(df_hoy[df_hoy['estatus'].str.contains("Retardo|CRÍTICO", na=False)])
+    retardos = len(df_hoy[df_hoy['estatus'].str.contains("Retardo|CRÍTICO", case=False, na=False)])
     faltas = "a futuro"
     total_registros = len(df_hoy)
+    detalle_sucursal = ""
+    if "sucursal_id" in df_hoy.columns:
+        corte = df_hoy.groupby("sucursal_id").size().reset_index(name="registros")
+        detalle_sucursal = "\n".join(
+            [f"• Sucursal {row['sucursal_id']}: {row['registros']} registros" for _, row in corte.iterrows()]
+        )
     
     mensaje.attach(MIMEText("Buena tarde,\n\n"
                             "Se adjunta el reporte diario de asistencia." 
@@ -164,6 +209,8 @@ def enviar_reporte_diario(df_hoy):
                             f"📝 Total registros: {total_registros}\n"
                             f"⏰ Retardos: {retardos}\n"
                             f"🚫 Faltantes: {faltas}\n"
+                            f"\n"
+                            f"📍 Detalle por sucursal:\n{detalle_sucursal if detalle_sucursal else 'Sin dato de sucursal'}\n"
                             f"\n"
                             f"Sistema NEOMOTIC ACCESS PRO"
     ))
@@ -404,6 +451,10 @@ def registrar(nombre, tipo):
         if ahora.time() < datetime.strptime(HORA_SALIDA,"%H:%M:%S").time():
             est = "SALIDA ANTICIPADA"
 
+    if existe_registro_duplicado(nombre, tipo, ahora, ventana_min=2):
+        st.warning(f"⚠️ Ya existe un registro de {tipo} en los últimos 2 minutos. Evitamos duplicado.")
+        return
+
     try:
         response = supabase.table("registros").insert({
             "empleado": nombre,
@@ -474,6 +525,22 @@ if st.session_state.modo_kiosco and user.get("rol") in ROLES_KIOSCO:
 # 🧾 NORMAL
 # =========================
 st.markdown("## 🕒 Reloj Checador")
+components.html(f"""
+<div style="font-family: 'Orbitron', sans-serif; background:#0d1117; color:#00E5FF;
+padding:12px 18px; border-radius:12px; border:1px solid #00E5FF; text-align:center;
+box-shadow: 0 0 18px rgba(0,229,255,.35); margin-bottom:12px;">
+  <div style="font-size:13px; opacity:.8;">Hora actual (MX)</div>
+  <div id="neoClock" style="font-size:34px; font-weight:700; letter-spacing:2px;">--:--:--</div>
+</div>
+<script>
+function tick(){{
+  const now = new Date();
+  const fmt = now.toLocaleTimeString('es-MX', {{hour12:false,timeZone:'America/Mexico_City'}});
+  document.getElementById('neoClock').innerText = fmt;
+}}
+setInterval(tick, 1000); tick();
+</script>
+""", height=110)
 if st.session_state.get("ultima_geo") and "coords" in st.session_state.ultima_geo:
     st.caption(
         f"📍 GPS detectado: "
@@ -554,6 +621,14 @@ if user.get("rol") in ROLES_ADMIN:
         c1.metric("Registros hoy", len(hoy))
         c2.metric("Retardos", len(hoy[hoy['estatus'].str.contains("Retardo|CRÍTICO", case=False, na=False)]))
         c3.metric("Salidas anticipadas", len(hoy[hoy['estatus']=="SALIDA ANTICIPADA"]))
+        c4, c5 = st.columns(2)
+        empleados_hoy = hoy['empleado'].nunique() if 'empleado' in hoy.columns else 0
+        total_empleados = len(obtener_empleados())
+        puntual = len(hoy[hoy['estatus'] == "A Tiempo"])
+        puntualidad_pct = (puntual / len(hoy) * 100) if len(hoy) else 0
+        cobertura_pct = (empleados_hoy / total_empleados * 100) if total_empleados else 0
+        c4.metric("Puntualidad", f"{puntualidad_pct:.1f}%")
+        c5.metric("Cobertura (presentes/empleados)", f"{cobertura_pct:.1f}%")
 
         st.dataframe(hoy.sort_values("fecha_hora", ascending=False))
 
@@ -590,7 +665,33 @@ if user.get("rol") in ROLES_ADMIN:
         st.subheader("🗺️ Ubicaciones")
         pts = hoy.dropna(subset=['lat','lon'])
         if not pts.empty:
-            st.map(pts)
+            sucursales = pd.DataFrame(supabase.table("sucursales").select("id,lat,lon,nombre").execute().data)
+            if not sucursales.empty:
+                fig_map = go.Figure()
+                fig_map.add_trace(go.Scattermapbox(
+                    lat=pts['lat'],
+                    lon=pts['lon'],
+                    mode='markers',
+                    marker=dict(size=9, color="#00BFFF"),
+                    text=pts.get('empleado', None),
+                    name="Registros"
+                ))
+                fig_map.add_trace(go.Scattermapbox(
+                    lat=sucursales['lat'],
+                    lon=sucursales['lon'],
+                    mode='markers',
+                    marker=dict(size=14, color="red"),
+                    text=sucursales.get('nombre', sucursales['id']),
+                    name="Sucursales"
+                ))
+                fig_map.update_layout(
+                    mapbox_style="open-street-map",
+                    margin={"l":0,"r":0,"t":0,"b":0},
+                    height=420
+                )
+                st.plotly_chart(fig_map, use_container_width=True)
+            else:
+                st.map(pts)
         else:
             ultimos = df.dropna(subset=['lat', 'lon']).sort_values("fecha_hora", ascending=False).head(200)
             if not ultimos.empty:
