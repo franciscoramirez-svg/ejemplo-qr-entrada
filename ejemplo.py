@@ -17,10 +17,8 @@ import plotly.graph_objects as go
 import time
 import hashlib
 import hmac
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email import encoders
 import streamlit.components.v1 as components
+
 
 # =========================
 # 🔌 SUPABASE
@@ -88,7 +86,7 @@ def validar_geocerca(lat, lon, sucursal_id):
 # =========================
 def obtener_registros():
     return pd.DataFrame(supabase.table("registros").select("*").execute().data)
-    
+
 def obtener_empleados():
     return supabase.table("empleados").select("*").execute().data
 
@@ -110,6 +108,14 @@ def enriquecer_con_nombre_sucursal(df):
     out["sucursal_id"] = out["sucursal_id"].astype(str)
     out = out.merge(cat.rename(columns={"id": "sucursal_id", "nombre": "sucursal_nombre"}), on="sucursal_id", how="left")
     return out
+
+@st.cache_resource
+def get_runtime_state():
+    """
+    Estado compartido del proceso Streamlit (entre sesiones activas).
+    Sirve para evitar envíos múltiples del reporte automático en el mismo día.
+    """
+    return {"fecha_reporte": None}
 
 def obtener_timezone_sucursal(sucursal_id):
     try:
@@ -191,9 +197,9 @@ def enviar_reporte_diario(df_hoy):
 
     if df_hoy.empty:
         st.warning("No hay registros hoy")
-        return
-        
-    df_hoy = enriquecer_con_nombre_sucursal(df_hoy)    
+        return False, None
+
+    df_hoy = enriquecer_con_nombre_sucursal(df_hoy)
 
     # 📊 Excel de HOY + pestañas por sucursal
     output = BytesIO()
@@ -208,23 +214,28 @@ def enviar_reporte_diario(df_hoy):
 
     hoy_str = datetime.now(zona).strftime("%Y-%m-%d")
 
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.base import MIMEBase
+    from email import encoders
+
     mensaje = MIMEMultipart()
-    mensaje['Subject'] = f"📊 Reporte Diario de Asistencia - {hoy_str}"
+    mensaje['Subject'] = f"📊 Reporte Diario de Asistencia - TRV - {hoy_str}"
     smtp_user = st.secrets.get("SMTP_USER")
     smtp_pass = st.secrets.get("SMTP_PASSWORD")
     email_to = st.secrets.get("REPORTE_DIARIO_TO")
     email_cc_raw = st.secrets.get("REPORTE_DIARIO_CC", "")
-
     cc_list = [x.strip() for x in str(email_cc_raw).split(",") if x.strip()]
 
     if not smtp_user or not smtp_pass or not email_to:
         st.error("Faltan credenciales de correo en secrets: SMTP_USER, SMTP_PASSWORD, REPORTE_DIARIO_TO")
-        return
+        return False, None
 
     mensaje['From'] = smtp_user
     mensaje['To'] = email_to
-    mensaje['Cc'] = ", ".join(cc_list)
+    if cc_list:
+        mensaje['Cc'] = ", ".join(cc_list)
 
+    
     retardos = len(df_hoy[df_hoy['estatus'].str.contains("Retardo|CRÍTICO", case=False, na=False)])
     faltas = 0
     try:
@@ -256,9 +267,10 @@ def enviar_reporte_diario(df_hoy):
                             f"\n"
                             f"📍 Detalle por sucursal:\n{detalle_sucursal if detalle_sucursal else 'Sin dato de sucursal'}\n"
                             f"\n"
-                            f"Sistema neoACCESS PRO"
+                            f"Sistema NEOMOTIC ACCESS PRO"
     ))
     
+
     part = MIMEBase('application', 'octet-stream')
     part.set_payload(output.getvalue())
     encoders.encode_base64(part)
@@ -268,16 +280,16 @@ def enviar_reporte_diario(df_hoy):
     )
 
     mensaje.attach(part)
+
     try:
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
-        server.login(smtp_user, smtp_pass)  # tibhlarouqepjzpu
+        server.login(smtp_user, smtp_pass)
 
         server.send_message(mensaje)
         server.quit()
 
         hora_envio = datetime.now(zona_usuario)
-
         st.success(f"📧 Reporte diario enviado correctamente ({hora_envio.strftime('%Y-%m-%d %H:%M:%S')})")
         return True, hora_envio
 
@@ -333,7 +345,7 @@ st.set_page_config(layout="wide")
 # =========================
 if not st.session_state.user:
 
-    st.title("🏢 neoAccess PRO")
+    st.title("🏢 NEOMOTIC Access PRO")
 
     nombre = st.text_input("Nombre")
     pin = st.text_input("PIN", type="password")
@@ -364,6 +376,7 @@ if not st.session_state.user:
                 st.session_state.intentos_login = 0
             st.error("❌ Datos incorrectos")
 
+
     st.stop()
 
 # =========================
@@ -377,7 +390,7 @@ if not user:
     
 # 🚨 VALIDACIÓN DE SUCURSAL
 if not user.get("sucursal_id"):
-    st.error("🚫 No tienes sucursal asignada. Contacta a administración/Supervisor.")
+    st.error("🚫 No tienes sucursal asignada. Contacta a administración.")
     st.stop()
 
 tz_sucursal_str = obtener_timezone_sucursal(user.get("sucursal_id"))
@@ -391,7 +404,7 @@ except Exception:
 if user.get("rol") in ROLES_ADMIN:
     st.session_state.registro_ok = False
 
-st.title("🏢 neoAccess PRO")
+st.title("🏢 NEOMOTIC Access PRO")
 st.success(f"👤 {user['nombre']} | {user.get('rol','empleado')}")
 
 # =========================
@@ -592,7 +605,6 @@ if st.session_state.modo_kiosco and user.get("rol") in ROLES_KIOSCO:
 # 🧾 NORMAL
 # =========================
 st.markdown("## 🕒 Reloj Checador")
-
 components.html(f"""
 <div style="font-family: 'Orbitron', sans-serif; background:#0d1117; color:#00E5FF;
 padding:12px 18px; border-radius:12px; border:1px solid #00E5FF; text-align:center;
@@ -673,10 +685,12 @@ if st.session_state.get("pendiente_registro"):
 if user.get("rol") in ROLES_ADMIN:
 
     st.divider()
-    st.subheader("📊 NeoDashboard")
+    st.subheader("📊 Dashboard Ejecutivo")
 
     df = obtener_registros()
     hoy = pd.DataFrame()
+    empleados = obtener_empleados()
+    presentes = []
 
     if not df.empty:
 
@@ -689,29 +703,14 @@ if user.get("rol") in ROLES_ADMIN:
         c1.metric("Registros hoy", len(hoy))
         c2.metric("Retardos", len(hoy[hoy['estatus'].str.contains("Retardo|CRÍTICO", case=False, na=False)]))
         c3.metric("Salidas anticipadas", len(hoy[hoy['estatus']=="SALIDA ANTICIPADA"]))
-        c4, c5, c6 = st.columns(3)
+        c4, c5 = st.columns(2)
         empleados_hoy = hoy['empleado'].nunique() if 'empleado' in hoy.columns else 0
-        total_empleados = len(obtener_empleados())
+        total_empleados = len(empleados)
         puntual = len(hoy[hoy['estatus'] == "A Tiempo"])
         puntualidad_pct = (puntual / len(hoy) * 100) if len(hoy) else 0
         cobertura_pct = (empleados_hoy / total_empleados * 100) if total_empleados else 0
-          # Fallback robusto por si se reordena UI y alguna variable queda fuera de alcance.
-        presentes = hoy['empleado'].unique()
-        try:
-            empleados_ref = empleados
-        except NameError:
-            empleados_ref = obtener_empleados()
-        try:
-            presentes_ref = set(presentes)
-        except NameError:
-            presentes_ref = set()
-        faltantes = [e.get('nombre')
-            for e in (empleados_ref or [])
-            if e.get('nombre') and e.get('nombre') not in presentes_ref
-        ]
         c4.metric("Puntualidad", f"{puntualidad_pct:.1f}%")
         c5.metric("Cobertura (presentes/empleados)", f"{cobertura_pct:.1f}%")
-        c6.metric("Faltantes hoy", len(faltantes))
 
         st.dataframe(hoy.sort_values("fecha_hora", ascending=False))
 
@@ -743,6 +742,7 @@ if user.get("rol") in ROLES_ADMIN:
         )
         
         col2.plotly_chart(fig2, use_container_width=True)
+
 
         st.subheader("🗺️ Ubicaciones")
         pts = hoy.dropna(subset=['lat','lon'])
@@ -781,22 +781,41 @@ if user.get("rol") in ROLES_ADMIN:
             else:
                 st.info("No hay coordenadas registradas todavía.")
 
-        
+        presentes = hoy['empleado'].unique()
+
+        # Fallback robusto por si se reordena UI y alguna variable queda fuera de alcance.
+        try:
+            empleados_ref = empleados
+        except NameError:
+            empleados_ref = obtener_empleados()
+
+        try:
+            presentes_ref = set(presentes)
+        except NameError:
+            presentes_ref = set()
+
+        faltantes = [
+            e.get('nombre')
+            for e in (empleados_ref or [])
+            if e.get('nombre') and e.get('nombre') not in presentes_ref
+        ]
+        st.metric("Faltantes hoy", len(faltantes))
+
         st.subheader("🚫 Faltantes")
         for f in faltantes:
             st.error(f)
-        
-        ahora = datetime.now(zona_usuario)
-        hora_actual = ahora.strftime("%H:%M")
-        fecha_hoy = ahora.date()
-        hora_objetivo = datetime.strptime("19:15", "%H:%M").time()
 
-    if ahora.time() >= hora_objetivo and st.session_state.get("fecha_reporte") != fecha_hoy:
+        ahora = datetime.now(zona_usuario)
+        fecha_hoy = ahora.date()
+        runtime_state = get_runtime_state()
+
+        hora_objetivo = datetime.strptime("19:15", "%H:%M").time()
+        if ahora.time() >= hora_objetivo and runtime_state.get("fecha_reporte") != fecha_hoy:
             ok_mail, hora_mail = normalizar_resultado_envio(enviar_reporte_diario(hoy))
-            st.session_state.fecha_reporte = fecha_hoy
+            runtime_state["fecha_reporte"] = fecha_hoy
             st.session_state.ultimo_reporte_status = "✅ Enviado" if ok_mail else "❌ Error al enviar"
             st.session_state.ultimo_reporte_hora = hora_mail.strftime("%Y-%m-%d %H:%M:%S") if hora_mail else None
-         
+
     # =========================
     # 🧾 EXPORTAR
     # =========================
@@ -841,14 +860,15 @@ if user.get("rol") in ROLES_ADMIN:
     
     # 📧 BOTÓN DE ALERTA
     if st.button("📧 Enviar reporte diario"):
-            ok_mail, hora_mail = normalizar_resultado_envio(enviar_reporte_diario(hoy))
-            st.session_state.ultimo_reporte_status = "✅ Enviado manual" if ok_mail else "❌ Error al enviar manual"
-            st.session_state.ultimo_reporte_hora = hora_mail.strftime("%Y-%m-%d %H:%M:%S") if hora_mail else None
-    
-            st.info(
-                f"Estado correo automático/manual: {st.session_state.get('ultimo_reporte_status', 'Sin envío')}"
-                + (f" | Hora: {st.session_state.get('ultimo_reporte_hora')}" if st.session_state.get("ultimo_reporte_hora") else "")
-            )
+        ok_mail, hora_mail = normalizar_resultado_envio(enviar_reporte_diario(hoy))
+        st.session_state.ultimo_reporte_status = "✅ Enviado manual" if ok_mail else "❌ Error al enviar manual"
+        st.session_state.ultimo_reporte_hora = hora_mail.strftime("%Y-%m-%d %H:%M:%S") if hora_mail else None
+
+    st.info(
+        f"Estado correo automático/manual: {st.session_state.get('ultimo_reporte_status', 'Sin envío')}"
+        + (f" | Hora: {st.session_state.get('ultimo_reporte_hora')}" if st.session_state.get("ultimo_reporte_hora") else "")
+    )
+
 
 if user.get("rol") in ROLES_ADMIN:
     # =========================
@@ -856,66 +876,65 @@ if user.get("rol") in ROLES_ADMIN:
     # =========================
     st.divider()
     st.subheader("📦 Generar QR de empleados")
-    
+
     empleados = obtener_empleados()
-    
+
     if empleados:
-    
+
         nombres_emp = [e['nombre'] for e in empleados]
-    
+
         st.info(f"Total empleados: {len(nombres_emp)}")
-    
+
         col1, col2 = st.columns(2)
-    
+
         # =========================
         # 🔹 DESCARGAR TODOS (ZIP)
         # =========================
-        
         if col1.button("📦 Descargar todos los QR (ZIP)"):
-    
+
             zip_buffer = BytesIO()
-    
+
             with zipfile.ZipFile(zip_buffer, "w") as z:
                 for emp in empleados:
                     qr = qrcode.make(emp['nombre'])
-    
+
                     img_bytes = BytesIO()
                     qr.save(img_bytes, format='PNG')
-    
+
                     z.writestr(f"{emp['nombre']}.png", img_bytes.getvalue())
-    
+
             st.download_button(
                 "⬇️ Descargar ZIP",
                 zip_buffer.getvalue(),
                 file_name="QR_Empleados.zip",
                 mime="application/zip"
             )
-    
+
         # =========================
         # 🔹 QR INDIVIDUAL
         # =========================
-        
         emp_sel = col2.selectbox("Selecciona empleado", nombres_emp)
-    
+
         if emp_sel:
             qr = qrcode.make(emp_sel)
             img_bytes = BytesIO()
             qr.save(img_bytes, format='PNG')
             img_bytes.seek(0)
-    
+
             st.image(img_bytes, caption=f"QR de {emp_sel}")
-    
+
             img_bytes = BytesIO()
             qr.save(img_bytes, format='PNG')
             img_bytes.seek(0)
-    
+
             st.download_button(
                 "⬇️ Descargar QR individual",
                 img_bytes.getvalue(),
                 file_name=f"{emp_sel}.png",
                 mime="image/png"
             )
-    
+
     else:
         st.warning("No hay empleados registrados")
-        
+
+
