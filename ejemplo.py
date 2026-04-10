@@ -91,22 +91,21 @@ if not st.session_state.autenticado:
     # Capturamos lo que el usuario escribió en el HTML
     datos_login = components.html(login_html, height=500)
 
-    if datos_login:
-        usuario_ingresado = datos_login.get("user")
-        clave_ingresada = datos_login.get("pass")
-
-        # CONSULTA REAL A SUPABASE
-        # Buscamos en la tabla 'usuarios' si coincide el nombre y la clave
-        try:
-            respuesta = supabase.table("usuarios").select("*").eq("usuario", usuario_ingresado).eq("password", clave_ingresada).execute()
-            
-            if len(respuesta.data) > 0:
-                st.session_state.autenticado = True
-                st.rerun()
-            else:
-                st.error("Usuario o contraseña incorrectos. Intenta de nuevo.")
-        except Exception as e:
-            st.error(f"Error de conexión: {e}")
+    with st.expander("Haz clic aquí para validar tus credenciales"):
+        usuario_ingresado = st.text_input("Confirmar Usuario")
+        clave_ingresada = st.text_input("Confirmar Clave", type="password")
+        
+        if st.button("Validar Acceso"):
+            try:
+                respuesta = supabase.table("usuarios").select("*").eq("usuario", usuario_ingresado).eq("password", clave_ingresada).execute()
+                
+                if len(respuesta.data) > 0:
+                    st.session_state.autenticado = True
+                    st.rerun()
+                else:
+                    st.error("Credenciales incorrectas")
+            except Exception as e:
+                st.error(f"Error: {e}")
 
 else:
     # BOTÓN PARA CERRAR SESIÓN
