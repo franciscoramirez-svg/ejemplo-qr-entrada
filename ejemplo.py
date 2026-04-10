@@ -27,7 +27,7 @@ url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-st.set_page_config(page_title="App QR Entrada", layout="centered")
+st.set_page_config(page_title="NeoAccessPRO", layout="centered")
 
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
@@ -97,7 +97,7 @@ if not st.session_state.autenticado:
         
         if st.button("Validar Acceso"):
             try:
-                respuesta = supabase.table("usuarios").select("*").eq("usuario", usuario_ingresado).eq("password", clave_ingresada).execute()
+                respuesta = supabase.table("empleados").select("*").eq("nombre", usuario_ingresado).eq("pin", clave_ingresada).execute()
                 
                 if len(respuesta.data) > 0:
                     st.session_state.autenticado = True
