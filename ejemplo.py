@@ -113,8 +113,6 @@ else:
     if st.sidebar.button("Cerrar Sesión"):
         st.session_state.autenticado = False
         st.rerun()
-)
-
 
     # =========================
     # ⚙️ CONFIG
