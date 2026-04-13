@@ -27,92 +27,6 @@ url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-st.set_page_config(page_title="NeoAccessPRO", layout="centered")
-
-if "autenticado" not in st.session_state:
-    st.session_state.autenticado = False
-
-# --- LÓGICA DE LOGIN ---
-if not st.session_state.autenticado:
-    # Ocultar basura de Streamlit
-    st.markdown("""<style>#MainMenu, footer, header {visibility: hidden;}</style>""", unsafe_allow_html=True)
-
-    login_html = """
-    <style>
-        body { background: #0f172a; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; color: white; font-family: Arial; overflow: hidden; }
-        .morph { width: 180px; height: 60px; border-radius: 40px; background: linear-gradient(45deg, #1e44d1, #19bbdf); display: flex; justify-content: center; align-items: center; cursor: pointer; position: relative; transition: all .6s cubic-bezier(.68, -0.55, .27, 1.55); box-shadow: 0 0 20px rgba(0, 255, 255, .4); }
-        .morph.active { width: 350px; height: 400px; border-radius: 20px; cursor: default; }
-        .form { opacity: 0; display: none; transition: .6s; width: 85%; }
-        .morph.active .form { opacity: 1; display: block; }
-        .btn-text { font-size: 18px; font-weight: bold; position: absolute; }
-        .morph.active .btn-text { display: none; }
-        .input-box { position: relative; margin: 20px 0; }
-        .input-box input { width: 100%; padding: 12px; border: none; border-radius: 8px; background: #1e293b; color: white; outline: none; }
-        .input-box label { position: absolute; left: 10px; top: 12px; color: #aaa; transition: 0.3s; pointer-events: none; }
-        .input-box input:focus + label, .input-box input:valid + label { top: -20px; font-size: 12px; color: #06b6d4; }
-        .submit { width: 100%; padding: 12px; border: none; border-radius: 8px; background: white; color: #0f172a; font-weight: bold; cursor: pointer; }
-        .particle { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: #06b6d4; pointer-events: none; animation: explode 1s forwards; }
-        @keyframes explode { 0% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--x), var(--y)); } }
-    </style>
-
-    <div class="morph" id="morph">
-        <div class="btn-text">Iniciar Sesión</div>
-        <div class="form">
-            <h2 style="text-align:center;">Acceso QR</h2>
-            <div class="input-box"><input type="text" id="user" required><label>Usuario</label></div>
-            <div class="input-box"><input type="password" id="pass" required><label>Clave</label></div>
-            <button class="submit" onclick="sendToStreamlit()">Entrar</button>
-        </div>
-    </div>
-
-    <script>
-        const m = document.getElementById("morph");
-        m.onclick = (e) => { if(!m.classList.contains("active")) { explode(e); setTimeout(()=>m.classList.add("active"), 200); } };
-
-        function sendToStreamlit() {
-            const u = document.getElementById("user").value;
-            const p = document.getElementById("pass").value;
-            // Enviamos los datos como un objeto a Streamlit
-            window.parent.postMessage({type: 'streamlit:setComponentValue', value: {user: u, pass: p}}, '*');
-        }
-
-        function explode(e) {
-            for(let i=0; i<30; i++) {
-                let div = document.createElement("div"); div.className="particle";
-                let a = Math.random()*360; let r = Math.random()*150;
-                div.style.left = e.clientX+"px"; div.style.top = e.clientY+"px";
-                div.style.setProperty("--x", Math.cos(a)*r+"px"); div.style.setProperty("--y", Math.sin(a)*r+"px");
-                document.body.appendChild(div); setTimeout(()=>div.remove(), 1000);
-            }
-        }
-    </script>
-    """
-
-    # Capturamos lo que el usuario escribió en el HTML
-    datos_login = components.html(login_html, height=500)
-
-    with st.expander("Haz clic aquí para validar tus credenciales"):
-        usuario_ingresado = st.text_input("Confirmar Usuario")
-        clave_ingresada = st.text_input("Confirmar Clave", type="password")
-        
-        if st.button("Validar Acceso"):
-            try:
-                respuesta = supabase.table("empleados").select("*").eq("nombre", usuario_ingresado).eq("pin", clave_ingresada).execute()
-                
-                if len(respuesta.data) > 0:
-                    st.session_state.autenticado = True
-                    st.rerun()
-                else:
-                    st.error("Credenciales incorrectas")
-            except Exception as e:
-                st.error(f"Error: {e}")
-
-else:
-    # BOTÓN PARA CERRAR SESIÓN
-    if st.sidebar.button("Cerrar Sesión"):
-        st.session_state.autenticado = False
-        st.rerun()
-
     # =========================
     # ⚙️ CONFIG
     # =========================
@@ -1022,7 +936,3 @@ else:
     
         else:
             st.warning("No hay empleados registrados")
-
-    st.success(f"Bienvenido al sistema de control de acceso.")
-    st.info("Pega aquí el resto de tu código de GitHub...")
-    
