@@ -338,8 +338,7 @@ if 'ultimo_reporte_status' not in st.session_state:
     st.session_state.ultimo_reporte_status = "Sin envío hoy"
 if 'ultimo_reporte_hora' not in st.session_state:
     st.session_state.ultimo_reporte_hora = None
-if 'qr_detectado' not in st.session_state:
-    st.session_state.qr_detectado = None
+
 
 st.set_page_config(layout="wide")
 
@@ -407,15 +406,6 @@ if not st.session_state.user:
         border: 2px solid #ddd;
     }
     </style>
-    """, unsafe_allow_html=True)
-
-# Para usar el estilo de la tarjeta de empleado:
-if st.session_state.qr_detectado:
-    st.markdown(f"""
-        <div class="employee-card">
-            <h3 style='margin:0; color:#1a237e;'>👤 Empleado Detectado</h3>
-            <p style='margin:0; font-size:18px;'>{st.session_state.qr_detectado}</p>
-        </div>
     """, unsafe_allow_html=True)
 
 
