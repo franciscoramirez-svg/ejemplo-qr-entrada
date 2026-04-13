@@ -338,6 +338,8 @@ if 'ultimo_reporte_status' not in st.session_state:
     st.session_state.ultimo_reporte_status = "Sin envío hoy"
 if 'ultimo_reporte_hora' not in st.session_state:
     st.session_state.ultimo_reporte_hora = None
+if 'qr_detectado' not in st.session_state:
+st.session_state.qr_detectado = None
 
 st.set_page_config(layout="wide")
 
