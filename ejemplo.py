@@ -346,7 +346,76 @@ st.set_page_config(layout="wide")
 # =========================
 if not st.session_state.user:
 
-    st.title("🏢 NEOMOTIC Access PRO")
+    st.title("🏢 neoAccess PRO")
+
+    # --- DISEÑO PROFESIONAL (CSS CUSTOM) ---
+    st.markdown("""
+    <style>
+    /* Fondo de la app */
+    .stApp {
+        background-color: #f4f7f9;
+    }
+    
+    /* Estilo de los botones principales (Entrada/Salida) */
+    div.stButton > button {
+        height: 120px;
+        width: 100%;
+        border-radius: 20px;
+        border: none;
+        font-size: 24px !important;
+        font-weight: bold;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        text-transform: uppercase;
+    }
+
+    /* Botón de Entrada (Verde) */
+    div.stButton > button[key="btn_ent"] {
+        background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+        color: white;
+    }
+
+    /* Botón de Salida (Azul/Rojo) */
+    div.stButton > button[key="btn_sal"] {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+        color: white;
+    }
+
+    /* Efecto Hover (al pasar el mouse o tocar) */
+    div.stButton > button:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+        opacity: 0.9;
+    }
+
+    /* Estilo para el contenedor del empleado */
+    .employee-card {
+        background-color: white;
+        padding: 20px;
+        border-radius: 15px;
+        border-left: 5px solid #1a237e;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    
+    /* Quitar el borde feo de la cámara */
+    .stCameraInput {
+        border-radius: 20px;
+        overflow: hidden;
+        border: 2px solid #ddd;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# Para usar el estilo de la tarjeta de empleado:
+if st.session_state.qr_detectado:
+    st.markdown(f"""
+        <div class="employee-card">
+            <h3 style='margin:0; color:#1a237e;'>👤 Empleado Detectado</h3>
+            <p style='margin:0; font-size:18px;'>{st.session_state.qr_detectado}</p>
+        </div>
+    """, unsafe_allow_html=True)
+
 
     nombre = st.text_input("Nombre")
     pin = st.text_input("PIN", type="password")
