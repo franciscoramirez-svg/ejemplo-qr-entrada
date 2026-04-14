@@ -712,7 +712,6 @@ if st.session_state.justificar:
     st.divider()
     st.warning("⚠️ Se requiere justificación por el estatus del registro")
 
-    with st.form("just"):
         motivo = st.text_area("Escribe el motivo:")
         
         st.write("ID actual:", st.session_state.registro_id)
@@ -750,8 +749,11 @@ if st.session_state.justificar:
 # 🔥 REGISTRO POST-JUSTIFICACIÓN
 # =========================
 if st.session_state.get("pendiente_registro"):
-    st.session_state.pendiente_registro = False
-    registrar(user['nombre'], "Entrada")
+    st.warning("⚠️ Tienes un registro pendiente")
+
+    if st.button("Completar entrada pendiente"):
+        registrar(user['nombre'], "Entrada")
+        st.session_state.pendiente_registro = False
 
 # =========================
 # 📊 DASHBOARD SOLO ADMIN
