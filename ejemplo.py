@@ -726,9 +726,9 @@ if st.session_state.justificar:
             if len(motivo) > 5:
                 try:
                     response = supabase.table("registros")\
-                    .update({"justificacion": motivo})\
-                    .eq("id", st.session_state.registro_id)\
-                    .execute()
+                        .update({"justificacion": motivo})\
+                        .eq("id", st.session_state.registro_id)\
+                        .execute()
                 
                      st.write("Respuesta DB:", response)
 
