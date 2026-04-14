@@ -732,6 +732,7 @@ if user.get("rol") in ROLES_ADMIN:
     st.subheader("📊 Dashboard Ejecutivo")
 
     df = obtener_registros()
+    empleados = obtener_empleados()
 
     if not df.empty:
 
