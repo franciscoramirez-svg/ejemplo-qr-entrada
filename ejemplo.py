@@ -731,6 +731,8 @@ if user.get("rol") in ROLES_ADMIN:
     st.divider()
     st.subheader("📊 Dashboard Ejecutivo")
 
+    df = obtener_registros()
+
     if not df.empty:
 
         df['fecha_hora'] = pd.to_datetime(df['fecha_hora'], errors='coerce')
