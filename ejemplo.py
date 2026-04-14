@@ -692,34 +692,40 @@ if st.session_state.mostrar_justificacion:
     st.divider()
     st.warning("⚠️ Se requiere justificación")
 
-    motivo = st.text_area("Escribe el motivo:")
+    with st.form("justificacion_form"):
 
-    if st.button("Guardar Justificación"):
+        motivo = st.text_area("Escribe el motivo:")
+    
+        submitted = st.form_submit_button("Guardar Justificación")
+    
+        if submitted:
+    
+            registro_id = st.session_state.get("registro_id")
+    
+            st.write("DEBUG ID:", registro_id)
+    
+            if not registro_id:
+                st.error("❌ No hay ID válido")
+                st.stop()
+    
+            response = supabase.table("registros").update({
+                "justificacion": motivo
+            }).eq("id", registro_id).execute()
+    
+            if response.data:
+                st.success("✅ Guardado correctamente")
+    
+                # 🔥 LIMPIEZA CORRECTA
+                st.session_state.justificar = False
+                st.session_state.registro_id = None
+    
+                st.rerun()
+            else:
+                st.error("❌ No se guardó (ID no existe)")
 
-        rid = st.session_state.registro_id_justificar
+    
 
-        if not rid:
-            st.error("ID inválido")
-            st.stop()
 
-        if len(motivo) < 6:
-            st.error("Mínimo 6 caracteres")
-            st.stop()
-
-        response = supabase.table("registros")\
-            .update({"justificacion": motivo})\
-            .eq("id", rid)\
-            .execute()
-
-        if response.data:
-            st.success("✅ Guardado correctamente")
-
-            st.session_state.mostrar_justificacion = False
-            st.session_state.registro_id_justificar = None
-
-            st.rerun()
-        else:
-            st.error("No se guardó")
 
 # =========================
 # 📊 DASHBOARD SOLO ADMIN
