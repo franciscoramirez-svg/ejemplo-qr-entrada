@@ -245,7 +245,7 @@ def enviar_reporte_diario(df_hoy):
         faltas = len([e for e in empleados if e.get('nombre') not in presentes])
     except Exception:
         faltas = 0
-    total_registros = len(df_hoy)
+    total_registros = df_hoy['empleado'].nunique()
     detalle_sucursal = ""
     if "sucursal_id" in df_hoy.columns:
         if "sucursal_nombre" in df_hoy.columns:
@@ -312,35 +312,25 @@ def normalizar_resultado_envio(resultado):
 # =========================
 # 🔐 SESSION
 # =========================
-if 'pendiente_registro' not in st.session_state:
-    st.session_state.pendiente_registro = False
-if 'user' not in st.session_state:
-    st.session_state.user = None
-if 'justificar' not in st.session_state:
-    st.session_state.justificar = False
-if 'registro_id' not in st.session_state:
-    st.session_state.registro_id = None
-if 'modo_kiosco' not in st.session_state:
-    st.session_state.modo_kiosco = False
-if 'registro_ok' not in st.session_state:
-    st.session_state.registro_ok = False
-if 'ultimo_movimiento' not in st.session_state:
-    st.session_state.ultimo_movimiento = ""
-if 'intentos_login' not in st.session_state:
-    st.session_state.intentos_login = 0
-if 'bloqueado_hasta' not in st.session_state:
-    st.session_state.bloqueado_hasta = None
-if 'ultima_geo' not in st.session_state:
-    st.session_state.ultima_geo = None
-if 'requiere_registro_post_justificacion' not in st.session_state:
-    st.session_state.requiere_registro_post_justificacion = False
-if 'ultimo_reporte_status' not in st.session_state:
-    st.session_state.ultimo_reporte_status = "Sin envío hoy"
-if 'ultimo_reporte_hora' not in st.session_state:
-    st.session_state.ultimo_reporte_hora = None
+def init_state():
+    defaults = {
+        "user": None,
+        "registro_id_actual": None,
+        "registro_id_justificar": None,
+        "mostrar_justificacion": False,
+        "registro_ok": False,
+        "ultimo_movimiento": "",
+        "modo_kiosco": False,
+        "ultima_geo": None,
+        "intentos_login": 0,
+        "bloqueado_hasta": None
+    }
 
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
 
-st.set_page_config(layout="wide")
+init_state()
 
 # =========================
 # 🔐 LOGIN
@@ -507,6 +497,14 @@ def validar_flujo(nombre, tipo):
     hoy = datetime.now(zona_usuario).date()
     ayer = hoy - timedelta(days=1)
 
+    foto = st.camera_input("📷 Rostro")
+
+    if foto:
+        nombre = reconocer_rostro(foto)
+    
+        if nombre:
+            registrar(nombre, "Entrada")
+
     if tipo == "Salida":
         hoy_regs = df[(df['empleado'] == nombre) & (df['fecha_hora'].dt.date == hoy)]
         if not any(hoy_regs['tipo'] == "Entrada"):
@@ -540,47 +538,38 @@ if geo_actual and "coords" in geo_actual:
 # =========================
 def registrar(nombre, tipo):
 
-    if st.session_state.registro_ok:
-        return
-
-    ok, msg = validar_flujo(nombre, tipo)
-
-    if not ok:
-        st.error(msg)
-        return
-
     ahora = datetime.now(zona_usuario)
 
+    # 📍 GPS
     loc = st.session_state.get("ultima_geo")
-    
-    # 🚨 CASO 1: No hay respuesta aún
-    if loc is None:
-        st.info("📡 No tenemos tu ubicación todavía. Acepta el permiso del navegador y vuelve a presionar.")
+    if not loc or "coords" not in loc:
+        st.warning("Activa ubicación")
         return
 
-    # 🚨 CASO 2: No viene estructura correcta
-    if "coords" not in loc:
-        st.warning("⚠️ No se pudo obtener ubicación. Verifica permisos del navegador")
-        return
-
-    # ✅ YA TENEMOS GPS
     lat = loc["coords"]["latitude"]
     lon = loc["coords"]["longitude"]
 
-    # 🔒 VALIDAR GEO
-    ok_geo, msg_geo = validar_geocerca(lat, lon, user.get('sucursal_id'))
-
+    # 📍 GEO CERCA
+    ok_geo, msg = validar_geocerca(lat, lon, user.get('sucursal_id'))
     if not ok_geo:
-        st.error(msg_geo)
+        st.error(msg)
         return
+
+    # 🔁 DUPLICADO
+    if existe_registro_duplicado(nombre, tipo, ahora):
+        st.warning("Registro duplicado detectado")
+        return
+
+    # 🧠 TURNOS DINÁMICOS
+    h_ent = datetime.strptime(user["hora_entrada"], "%H:%M:%S").time()
+    h_sal = datetime.strptime(user["hora_salida"], "%H:%M:%S").time()
 
     est = "A Tiempo"
     min_r = 0
 
     if tipo == "Entrada":
-        h_lim = datetime.strptime(HORA_ENTRADA, "%H:%M:%S").time()
         diff = (datetime.combine(ahora.date(), ahora.time()) -
-                datetime.combine(ahora.date(), h_lim)).total_seconds() / 60
+                datetime.combine(ahora.date(), h_ent)).total_seconds()/60
 
         min_r = max(0, int(diff))
 
@@ -590,41 +579,35 @@ def registrar(nombre, tipo):
             est = "Retardo"
 
     if tipo == "Salida":
-        if ahora.time() < datetime.strptime(HORA_SALIDA,"%H:%M:%S").time():
+        if ahora.time() < h_sal:
             est = "SALIDA ANTICIPADA"
 
-    if existe_registro_duplicado(nombre, tipo, ahora, ventana_min=2):
-        st.warning(f"⚠️ Ya existe un registro de {tipo} en los últimos 2 minutos. Evitamos duplicado.")
-        return
+    # 💾 INSERT
+    res = supabase.table("registros").insert({
+        "empleado": nombre,
+        "fecha_hora": ahora.isoformat(),
+        "lat": lat,
+        "lon": lon,
+        "tipo": tipo,
+        "estatus": est,
+        "min_retardo": min_r,
+        "sucursal_id": user['sucursal_id'],
+        "justificacion": ""
+    }).execute()
 
-    try:
-        response = supabase.table("registros").insert({
-            "empleado": nombre,
-            "fecha_hora": ahora.isoformat(),
-            "lat": lat,
-            "lon": lon,
-            "tipo": tipo,
-            "estatus": est,
-            "min_retardo": min_r,
-            "sucursal_id": user['sucursal_id'],
-            "justificacion": "",
-            "horas_extra": False
-        }).execute()
+    if res.data:
+        rid = res.data[0]['id']
 
-        if response.data:
-            st.session_state.registro_id = response.data[0]['id']
-            st.session_state.registro_ok = True
-            st.session_state.ultimo_movimiento = f"{tipo} registrada"
-        
-            if est != "A Tiempo":
-                st.session_state.justificar = True
-                st.session_state.requiere_registro_post_justificacion = False
+        st.session_state.registro_id_actual = rid
+        st.session_state.registro_ok = True
+        st.session_state.ultimo_movimiento = f"{tipo} registrada"
 
-            st.toast(f"{tipo} registrada", icon="✅")
-            st.rerun()
+        # ⚠️ JUSTIFICACIÓN
+        if est != "A Tiempo":
+            st.session_state.mostrar_justificacion = True
+            st.session_state.registro_id_justificar = rid
 
-    except Exception as e:
-        st.error(f"❌ Error al insertar: {e}")
+        st.rerun()
 
 # =========================
 # 🖥️ KIOSCO QR
@@ -706,40 +689,39 @@ else:
 # =========================
 # ⚠️ JUSTIFICACIÓN
 # =========================
-if st.session_state.justificar:
+if st.session_state.mostrar_justificacion:
+
     st.divider()
-    st.warning("⚠️ Se requiere justificación por el estatus del registro")
+    st.warning("⚠️ Se requiere justificación")
 
-    with st.form("just"):
-        motivo = st.text_area("Escribe el motivo:")
+    motivo = st.text_area("Escribe el motivo:")
 
-        if st.form_submit_button("Guardar Justificación"):
-            if len(motivo) > 5:
-                try:
-                     supabase.table("registros").update({
-                            "justificacion": motivo
-                     }).eq("id", st.session_state.registro_id).execute()
+    if st.button("Guardar Justificación"):
 
-                     st.success("✅ Justificación guardada correctamente")
-                    
-                     # Limpiamos el estado para que desaparezca el formulario
-                     st.session_state.justificar = False
-                     st.session_state.pendiente_registro = st.session_state.get("requiere_registro_post_justificacion", False)
-                     st.session_state.requiere_registro_post_justificacion = False
+        rid = st.session_state.registro_id_justificar
 
-                     st.rerun()
-                
-                except Exception as e:
-                    st.error(f"Error al actualizar en Supabase: {e}")
-            else:
-                st.error("Por favor, escribe un motivo más detallado (mínimo 6 caracteres).")
-                
-# =========================
-# 🔥 REGISTRO POST-JUSTIFICACIÓN
-# =========================
-if st.session_state.get("pendiente_registro"):
-    st.session_state.pendiente_registro = False
-    registrar(user['nombre'], "Entrada")
+        if not rid:
+            st.error("ID inválido")
+            st.stop()
+
+        if len(motivo) < 6:
+            st.error("Mínimo 6 caracteres")
+            st.stop()
+
+        response = supabase.table("registros")\
+            .update({"justificacion": motivo})\
+            .eq("id", rid)\
+            .execute()
+
+        if response.data:
+            st.success("✅ Guardado correctamente")
+
+            st.session_state.mostrar_justificacion = False
+            st.session_state.registro_id_justificar = None
+
+            st.rerun()
+        else:
+            st.error("No se guardó")
 
 # =========================
 # 📊 DASHBOARD SOLO ADMIN
@@ -749,10 +731,13 @@ if user.get("rol") in ROLES_ADMIN:
     st.divider()
     st.subheader("📊 Dashboard Ejecutivo")
 
-    df = obtener_registros()
-    hoy = pd.DataFrame()
-    empleados = obtener_empleados()
-    presentes = []
+    entradas = hoy[hoy['tipo']=="Entrada"]
+
+    presentes = entradas['empleado'].nunique()
+    total = len(empleados)
+    
+    st.metric("Personas hoy", presentes)
+    st.metric("Asistencia", f"{(presentes/total*100):.1f}%" if total else "0%")
 
     if not df.empty:
 
