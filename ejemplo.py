@@ -717,33 +717,33 @@ if st.session_state.justificar:
     st.write("ID actual:", st.session_state.registro_id)
     st.write("Motivo:", motivo)
 
-        if not st.session_state.registro_id:
-            st.error("❌ No hay ID de registro válido")
-            st.stop()
+    if not st.session_state.registro_id:
+        st.error("❌ No hay ID de registro válido")
+        st.stop()
 
-        if st.button("Guardar Justificación"):
-            if len(motivo) > 5:
-                try:
-                     response = supabase.table("registros")\
-                         .update({"justificacion": motivo})\
-                         .eq("id", st.session_state.registro_id)\
-                         .execute()
+    if st.button("Guardar Justificación"):
+        if len(motivo) > 5:
+            try:
+                 response = supabase.table("registros")\
+                     .update({"justificacion": motivo})\
+                     .eq("id", st.session_state.registro_id)\
+                     .execute()
+            
+                 st.write("Respuesta DB:", response)
+
+                 st.success("✅ Justificación guardada correctamente")
                 
-                     st.write("Respuesta DB:", response)
+                 # Limpiamos el estado para que desaparezca el formulario
+                 st.session_state.justificar = False
+                 st.session_state.pendiente_registro = st.session_state.get("requiere_registro_post_justificacion", False)
+                 st.session_state.requiere_registro_post_justificacion = False
 
-                     st.success("✅ Justificación guardada correctamente")
-                    
-                     # Limpiamos el estado para que desaparezca el formulario
-                     st.session_state.justificar = False
-                     st.session_state.pendiente_registro = st.session_state.get("requiere_registro_post_justificacion", False)
-                     st.session_state.requiere_registro_post_justificacion = False
-
-                     st.rerun()
-                
-                except Exception as e:
-                    st.error(f"Error al actualizar en Supabase: {e}")
-            else:
-                st.error("Por favor, escribe un motivo más detallado (mínimo 6 caracteres).")
+                 st.rerun()
+            
+            except Exception as e:
+                st.error(f"Error al actualizar en Supabase: {e}")
+        else:
+            st.error("Por favor, escribe un motivo más detallado (mínimo 6 caracteres).")
                 
 # =========================
 # 🔥 REGISTRO POST-JUSTIFICACIÓN
