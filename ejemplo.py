@@ -712,10 +712,10 @@ if st.session_state.justificar:
     st.divider()
     st.warning("⚠️ Se requiere justificación por el estatus del registro")
 
-        motivo = st.text_area("Escribe el motivo:")
+    motivo = st.text_area("Escribe el motivo:")
         
-        st.write("ID actual:", st.session_state.registro_id)
-        st.write("Motivo:", motivo)
+    st.write("ID actual:", st.session_state.registro_id)
+    st.write("Motivo:", motivo)
 
         if not st.session_state.registro_id:
             st.error("❌ No hay ID de registro válido")
