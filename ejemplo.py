@@ -245,7 +245,7 @@ def enviar_reporte_diario(df_hoy):
         faltas = len([e for e in empleados if e.get('nombre') not in presentes])
     except Exception:
         faltas = 0
-    total_registros = len(df_hoy)
+    total_registros = df_hoy['empleado'].nunique()
     detalle_sucursal = ""
     if "sucursal_id" in df_hoy.columns:
         if "sucursal_nombre" in df_hoy.columns:
@@ -290,7 +290,7 @@ def enviar_reporte_diario(df_hoy):
         server.send_message(mensaje)
         server.quit()
 
-        hora_envio = datetime.now(zona_usuario)
+        hora_envio = datetime.now(zona)
         st.success(f"📧 Reporte diario enviado correctamente ({hora_envio.strftime('%Y-%m-%d %H:%M:%S')})")
         return True, hora_envio
 
@@ -612,7 +612,9 @@ def registrar(nombre, tipo):
         }).execute()
 
         if response.data:
-            st.session_state.registro_id = response.data[0]['id']
+            nuevo_id = response.data[0]['id']  # 👈 GUARDAR LOCAL
+            st.session_state.registro_id = nuevo_id
+            st.write("DEBUG ID:", st.session_state.registro_id)
             st.session_state.registro_ok = True
             st.session_state.ultimo_movimiento = f"{tipo} registrada"
         
@@ -713,7 +715,7 @@ if st.session_state.justificar:
     with st.form("just"):
         motivo = st.text_area("Escribe el motivo:")
 
-        if st.form_submit_button("Guardar Justificación"):
+        if st.button("Guardar Justificación"):
             if len(motivo) > 5:
                 try:
                      supabase.table("registros").update({
@@ -762,7 +764,7 @@ if user.get("rol") in ROLES_ADMIN:
         hoy = df[df['fecha_hora'].dt.date == datetime.now(zona_usuario).date()]
 
         c1, c2, c3 = st.columns(3)
-        c1.metric("Registros hoy", len(hoy))
+        c1.metric("Registros hoy", hoy['empleado'].nunique())
         c2.metric("Retardos", len(hoy[hoy['estatus'].str.contains("Retardo|CRÍTICO", case=False, na=False)]))
         c3.metric("Salidas anticipadas", len(hoy[hoy['estatus']=="SALIDA ANTICIPADA"]))
         c4, c5 = st.columns(2)
@@ -843,7 +845,7 @@ if user.get("rol") in ROLES_ADMIN:
             else:
                 st.info("No hay coordenadas registradas todavía.")
 
-        presentes = hoy['empleado'].unique()
+        presentes = hoy[hoy['tipo']=="Entrada"]['empleado'].unique()
 
         # Fallback robusto por si se reordena UI y alguna variable queda fuera de alcance.
         try:
