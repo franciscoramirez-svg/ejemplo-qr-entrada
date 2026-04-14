@@ -245,7 +245,7 @@ def enviar_reporte_diario(df_hoy):
         faltas = len([e for e in empleados if e.get('nombre') not in presentes])
     except Exception:
         faltas = 0
-    total_registros = df_hoy['empleado'].nunique()
+    total_registros = len(df_hoy)
     detalle_sucursal = ""
     if "sucursal_id" in df_hoy.columns:
         if "sucursal_nombre" in df_hoy.columns:
@@ -290,7 +290,7 @@ def enviar_reporte_diario(df_hoy):
         server.send_message(mensaje)
         server.quit()
 
-        hora_envio = datetime.now(zona)
+        hora_envio = datetime.now(zona_usuario)
         st.success(f"📧 Reporte diario enviado correctamente ({hora_envio.strftime('%Y-%m-%d %H:%M:%S')})")
         return True, hora_envio
 
@@ -612,9 +612,7 @@ def registrar(nombre, tipo):
         }).execute()
 
         if response.data:
-            nuevo_id = response.data[0]['id']  # 👈 GUARDAR LOCAL
-            st.session_state.registro_id = nuevo_id
-            st.write("DEBUG ID:", st.session_state.registro_id)
+            st.session_state.registro_id = response.data[0]['id']
             st.session_state.registro_ok = True
             st.session_state.ultimo_movimiento = f"{tipo} registrada"
         
@@ -712,48 +710,36 @@ if st.session_state.justificar:
     st.divider()
     st.warning("⚠️ Se requiere justificación por el estatus del registro")
 
-    motivo = st.text_area("Escribe el motivo:")
-        
-    st.write("ID actual:", st.session_state.registro_id)
-    st.write("Motivo:", motivo)
+    with st.form("just"):
+        motivo = st.text_area("Escribe el motivo:")
 
-    if not st.session_state.registro_id:
-        st.error("❌ No hay ID de registro válido")
-        st.stop()
+        if st.form_submit_button("Guardar Justificación"):
+            if len(motivo) > 5:
+                try:
+                     supabase.table("registros").update({
+                            "justificacion": motivo
+                     }).eq("id", st.session_state.registro_id).execute()
 
-    if st.button("Guardar Justificación"):
-        if len(motivo) > 5:
-            try:
-                 response = supabase.table("registros")\
-                     .update({"justificacion": motivo})\
-                     .eq("id", st.session_state.registro_id)\
-                     .execute()
-            
-                 st.write("Respuesta DB:", response)
+                     st.success("✅ Justificación guardada correctamente")
+                    
+                     # Limpiamos el estado para que desaparezca el formulario
+                     st.session_state.justificar = False
+                     st.session_state.pendiente_registro = st.session_state.get("requiere_registro_post_justificacion", False)
+                     st.session_state.requiere_registro_post_justificacion = False
 
-                 st.success("✅ Justificación guardada correctamente")
+                     st.rerun()
                 
-                 # Limpiamos el estado para que desaparezca el formulario
-                 st.session_state.justificar = False
-                 st.session_state.pendiente_registro = st.session_state.get("requiere_registro_post_justificacion", False)
-                 st.session_state.requiere_registro_post_justificacion = False
-
-                 st.rerun()
-            
-            except Exception as e:
-                st.error(f"Error al actualizar en Supabase: {e}")
-        else:
-            st.error("Por favor, escribe un motivo más detallado (mínimo 6 caracteres).")
+                except Exception as e:
+                    st.error(f"Error al actualizar en Supabase: {e}")
+            else:
+                st.error("Por favor, escribe un motivo más detallado (mínimo 6 caracteres).")
                 
 # =========================
 # 🔥 REGISTRO POST-JUSTIFICACIÓN
 # =========================
 if st.session_state.get("pendiente_registro"):
-    st.warning("⚠️ Tienes un registro pendiente")
-
-    if st.button("Completar entrada pendiente"):
-        registrar(user['nombre'], "Entrada")
-        st.session_state.pendiente_registro = False
+    st.session_state.pendiente_registro = False
+    registrar(user['nombre'], "Entrada")
 
 # =========================
 # 📊 DASHBOARD SOLO ADMIN
@@ -776,7 +762,7 @@ if user.get("rol") in ROLES_ADMIN:
         hoy = df[df['fecha_hora'].dt.date == datetime.now(zona_usuario).date()]
 
         c1, c2, c3 = st.columns(3)
-        c1.metric("Registros hoy", hoy['empleado'].nunique())
+        c1.metric("Registros hoy", len(hoy))
         c2.metric("Retardos", len(hoy[hoy['estatus'].str.contains("Retardo|CRÍTICO", case=False, na=False)]))
         c3.metric("Salidas anticipadas", len(hoy[hoy['estatus']=="SALIDA ANTICIPADA"]))
         c4, c5 = st.columns(2)
@@ -857,7 +843,7 @@ if user.get("rol") in ROLES_ADMIN:
             else:
                 st.info("No hay coordenadas registradas todavía.")
 
-        presentes = hoy[hoy['tipo']=="Entrada"]['empleado'].unique()
+        presentes = hoy['empleado'].unique()
 
         # Fallback robusto por si se reordena UI y alguna variable queda fuera de alcance.
         try:
