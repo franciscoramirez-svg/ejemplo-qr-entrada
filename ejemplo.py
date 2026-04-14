@@ -714,13 +714,23 @@ if st.session_state.justificar:
 
     with st.form("just"):
         motivo = st.text_area("Escribe el motivo:")
+        
+        st.write("ID actual:", st.session_state.registro_id)
+        st.write("Motivo:", motivo)
+
+        if not st.session_state.registro_id:
+            st.error("❌ No hay ID de registro válido")
+            st.stop()
 
         if st.button("Guardar Justificación"):
             if len(motivo) > 5:
                 try:
-                     supabase.table("registros").update({
-                            "justificacion": motivo
-                     }).eq("id", st.session_state.registro_id).execute()
+                    response = supabase.table("registros")\
+                    .update({"justificacion": motivo})\
+                    .eq("id", st.session_state.registro_id)\
+                    .execute()
+                
+                     st.write("Respuesta DB:", response)
 
                      st.success("✅ Justificación guardada correctamente")
                     
