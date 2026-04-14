@@ -731,20 +731,20 @@ if user.get("rol") in ROLES_ADMIN:
     st.divider()
     st.subheader("📊 Dashboard Ejecutivo")
 
-    entradas = hoy[hoy['tipo']=="Entrada"]
-
-    presentes = entradas['empleado'].nunique()
-    total = len(empleados)
-    
-    st.metric("Personas hoy", presentes)
-    st.metric("Asistencia", f"{(presentes/total*100):.1f}%" if total else "0%")
-
     if not df.empty:
 
         df['fecha_hora'] = pd.to_datetime(df['fecha_hora'], errors='coerce')
         df = df.dropna(subset=['fecha_hora'])
 
         hoy = df[df['fecha_hora'].dt.date == datetime.now(zona_usuario).date()]
+
+        entradas = hoy[hoy['tipo']=="Entrada"]
+
+        presentes = entradas['empleado'].nunique()
+        total = len(empleados)
+        
+        st.metric("Personas hoy", presentes)
+        st.metric("Asistencia", f"{(presentes/total*100):.1f}%" if total else "0%")
 
         c1, c2, c3 = st.columns(3)
         c1.metric("Registros hoy", len(hoy))
