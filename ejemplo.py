@@ -595,17 +595,15 @@ def registrar(nombre, tipo):
         "justificacion": ""
     }).execute()
 
-    if res.data:
-        rid = res.data[0]['id']
-
-        st.session_state.registro_id_actual = rid
+    if response.data:
+        nuevo_id = response.data[0]['id']
+    
+        st.session_state.registro_id = nuevo_id  # 🔥 CLAVE
         st.session_state.registro_ok = True
         st.session_state.ultimo_movimiento = f"{tipo} registrada"
 
-        # ⚠️ JUSTIFICACIÓN
         if est != "A Tiempo":
-            st.session_state.mostrar_justificacion = True
-            st.session_state.registro_id_justificar = rid
+            st.session_state.justificar = True
 
         st.rerun()
 
