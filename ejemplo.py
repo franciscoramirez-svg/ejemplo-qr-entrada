@@ -748,8 +748,6 @@ if user.get("rol") in ROLES_ADMIN:
         
         st.metric("Personas hoy", presentes)
         st.metric("Asistencia", f"{(presentes/total*100):.1f}%" if total else "0%")
-        else:
-            st.info("No hay registros aún")
 
         c1, c2, c3 = st.columns(3)
         c1.metric("Registros hoy", len(hoy))
