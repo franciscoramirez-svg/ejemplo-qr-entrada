@@ -617,7 +617,7 @@ def registrar(nombre, tipo):
     
     try:
         # 💾 INSERT
-        res = supabase.table("registros").insert({
+        response = supabase.table("registros").insert({
             "empleado": nombre,
             "fecha_hora": ahora.isoformat(),
             "lat": lat,
@@ -625,30 +625,23 @@ def registrar(nombre, tipo):
             "tipo": tipo,
             "estatus": est,
             "min_retardo": min_r,
-            "sucursal_id": str(sucursal_id),
-            "justificacion": ""
+            "sucursal_id": str(user.get("sucursal_id")),
+            "justificacion": "",
+            "horas_extra": False
         }).execute()
-        
+    
+        # 🔥 DEBUG REAL
+        st.write("🔍 RESPONSE COMPLETO:", response)
+    
+        if hasattr(response, "data"):
+            st.write("📦 DATA:", response.data)
+    
+        if hasattr(response, "error"):
+            st.write("🚨 ERROR:", response.error)
+    
     except Exception as e:
-        st.error(f"❌ Error al insertar: {e}")
-        return  # 🔥 CORTA EL FLUJO
-    
-    if response is not None and hasattr(response, "data") and response.data:
-        
-        nuevo_id = response.data[0]['id']
-    
-        st.session_state.registro_id = nuevo_id  # 🔥 CLAVE
-        st.session_state.registro_ok = True
-        st.session_state.ultimo_movimiento = f"{tipo} registrada"
-    
-        if est != "A Tiempo":
-            st.session_state.justificar = True
-    
-        st.rerun()
-    
-    else:
-        st.error("❌ No se pudo guardar el registro")
-
+        st.error(f"💥 EXCEPCIÓN REAL: {e}")
+        st.stop()
 # =========================
 # 🖥️ KIOSCO QR
 # =========================
