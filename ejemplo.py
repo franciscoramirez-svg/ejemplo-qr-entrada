@@ -501,7 +501,7 @@ if not st.session_state.user:
         st.success(f"Bienvenido {user_data['nombre']} - {suc.data[0]['nombre']}")
         st.rerun()
     st.stop()
-
+    st.write(st.session_state.user)
 # =========================
 # 👤 USER
 # =========================
