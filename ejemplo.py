@@ -21,13 +21,6 @@ import streamlit.components.v1 as components
 
 
 # =========================
-# 🔌 SUPABASE
-# =========================
-url = st.secrets["SUPABASE_URL"]
-key = st.secrets["SUPABASE_KEY"]
-supabase = create_client(url, key)
-
-# =========================
 # 🔄 MIGRACIÓN
 # =========================
 def migrar_pines():
