@@ -410,26 +410,51 @@ if not st.session_state.user:
         st.stop()
 
     if st.button("Ingresar"):
-        res = supabase.table("empleados")\
-            .select("*")\
-            .eq("nombre", nombre)\
-            .eq("activo", True)\
-            .execute()
 
-        if res.data and validar_pin(res.data[0], pin):
-            st.session_state.user = res.data[0]
-            st.session_state.intentos_login = 0
-            st.session_state.bloqueado_hasta = None
-            st.rerun()
-        else:
-            st.session_state.intentos_login += 1
-            if st.session_state.intentos_login >= 5:
-                st.session_state.bloqueado_hasta = datetime.utcnow() + timedelta(minutes=5)
-                st.session_state.intentos_login = 0
-            st.error("❌ Datos incorrectos")
+    res = supabase.table("empleados")\
+        .select("id,nombre,rol,activo,sucursal_id,pin,pin_hash")\
+        .eq("nombre", nombre)\
+        .eq("activo", True)\
+        .execute()
 
+    if not res.data:
+        st.error("❌ Usuario no encontrado o inactivo")
+        st.stop()
 
-    st.stop()
+    user_data = res.data[0]
+
+    # 🔒 VALIDAR PIN
+    if not validar_pin(user_data, pin):
+        st.error("❌ PIN incorrecto")
+        st.stop()
+
+    # 🔥 VALIDAR SUCURSAL
+    if not user_data.get("sucursal_id"):
+        st.error("❌ Usuario sin sucursal asignada")
+        st.stop()
+
+    # 🔥 VALIDAR QUE EXISTA LA SUCURSAL
+    suc = supabase.table("sucursales")\
+        .select("id,nombre")\
+        .eq("id", user_data["sucursal_id"])\
+        .execute()
+
+    if not suc.data:
+        st.error("❌ La sucursal asignada no existe")
+        st.stop()
+
+    # 🔥 GUARDAR SESIÓN LIMPIA
+    st.session_state.user = {
+        "id": user_data["id"],
+        "nombre": user_data["nombre"],
+        "rol": user_data.get("rol", "empleado"),
+        "sucursal_id": str(user_data["sucursal_id"]),  # 🔥 SIEMPRE STRING
+        "sucursal_nombre": suc.data[0]["nombre"]
+    }
+
+    st.success(f"Bienvenido {user_data['nombre']} - {suc.data[0]['nombre']}")
+    st.rerun()
+
 
 # =========================
 # 👤 USER
@@ -538,6 +563,12 @@ if geo_actual and "coords" in geo_actual:
 # =========================
 def registrar(nombre, tipo):
 
+    sucursal_id = user.get("sucursal_id")
+
+    if not sucursal_id:
+        st.error("❌ No hay sucursal válida")
+        return
+
     ahora = datetime.now(zona_usuario)
 
     # 📍 GPS
@@ -594,7 +625,7 @@ def registrar(nombre, tipo):
             "tipo": tipo,
             "estatus": est,
             "min_retardo": min_r,
-            "sucursal_id": user['sucursal_id'],
+            "sucursal_id": str(sucursal_id),
             "justificacion": ""
         }).execute()
         
