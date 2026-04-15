@@ -551,6 +551,10 @@ if user.get("rol") in ROLES_KIOSCO:
         st.session_state.modo_kiosco = False
         st.rerun()
 
+if st.button("🧹 Reset sesión"):
+    st.session_state.clear()
+    st.rerun()
+
 # =========================
 # 🧠 VALIDACIONES
 # =========================
