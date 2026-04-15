@@ -323,7 +323,7 @@ def init_state():
         "modo_kiosco": False,
         "ultima_geo": None,
         "intentos_login": 0,
-        "bloqueado_hasta": None
+        "bloqueado_hasta": None,
         "registro_reciente": False
     }
 
