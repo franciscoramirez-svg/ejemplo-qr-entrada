@@ -789,25 +789,52 @@ else:
 # =========================
 # ⚠️ JUSTIFICACIÓN
 # =========================
-registro_id = st.session_state.get("registro_id_justificar")
+# =========================
+# ⚠️ JUSTIFICACIÓN
+# =========================
+if st.session_state.get("mostrar_justificacion"):
 
-st.write(f"DEBUG ID: {registro_id}")
+    st.divider()
+    st.warning("⚠️ Se requiere justificación")
 
-if not registro_id:
-    st.error("❌ No hay ID para justificar")
-    st.stop()
+    with st.form("form_justificacion"):
+        motivo = st.text_area("Escribe el motivo:")
 
-res = supabase.table("registros").update({
-    "justificacion": motivo
-}).eq("id", registro_id).execute()
+        submitted = st.form_submit_button("Guardar Justificación")
 
-if res.data:
-    st.success("✅ Justificación guardada")
-    st.session_state.mostrar_justificacion = False
-    st.session_state.registro_id_justificar = None
-    st.rerun()
-else:
-    st.error("❌ No se guardó (ID no existe)")
+        if submitted:
+
+            if not motivo or len(motivo) < 5:
+                st.error("Escribe un motivo válido")
+            else:
+
+                registro_id = st.session_state.get("registro_id_justificar")
+
+                st.write("DEBUG ID:", registro_id)
+
+                if not registro_id:
+                    st.error("❌ No hay ID para justificar")
+                else:
+                    try:
+                        res = supabase.table("registros").update({
+                            "justificacion": motivo
+                        }).eq("id", registro_id).execute()
+
+                        st.write("RESPONSE UPDATE:", res)
+
+                        if res.data:
+                            st.success("✅ Justificación guardada")
+
+                            # 🔥 LIMPIAR ESTADO
+                            st.session_state.mostrar_justificacion = False
+                            st.session_state.registro_id_justificar = None
+
+                            st.rerun()
+                        else:
+                            st.error("❌ No se guardó (ID no existe)")
+
+                    except Exception as e:
+                        st.error(f"❌ Error: {e}")
 
     
 # =========================
