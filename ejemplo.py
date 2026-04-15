@@ -411,49 +411,49 @@ if not st.session_state.user:
 
     if st.button("Ingresar"):
 
-    res = supabase.table("empleados")\
-        .select("id,nombre,rol,activo,sucursal_id,pin,pin_hash")\
-        .eq("nombre", nombre)\
-        .eq("activo", True)\
-        .execute()
-
-    if not res.data:
-        st.error("❌ Usuario no encontrado o inactivo")
-        st.stop()
-
-    user_data = res.data[0]
-
-    # 🔒 VALIDAR PIN
-    if not validar_pin(user_data, pin):
-        st.error("❌ PIN incorrecto")
-        st.stop()
-
-    # 🔥 VALIDAR SUCURSAL
-    if not user_data.get("sucursal_id"):
-        st.error("❌ Usuario sin sucursal asignada")
-        st.stop()
-
-    # 🔥 VALIDAR QUE EXISTA LA SUCURSAL
-    suc = supabase.table("sucursales")\
-        .select("id,nombre")\
-        .eq("id", user_data["sucursal_id"])\
-        .execute()
-
-    if not suc.data:
-        st.error("❌ La sucursal asignada no existe")
-        st.stop()
-
-    # 🔥 GUARDAR SESIÓN LIMPIA
-    st.session_state.user = {
-        "id": user_data["id"],
-        "nombre": user_data["nombre"],
-        "rol": user_data.get("rol", "empleado"),
-        "sucursal_id": str(user_data["sucursal_id"]),  # 🔥 SIEMPRE STRING
-        "sucursal_nombre": suc.data[0]["nombre"]
-    }
-
-    st.success(f"Bienvenido {user_data['nombre']} - {suc.data[0]['nombre']}")
-    st.rerun()
+        res = supabase.table("empleados")\
+            .select("id,nombre,rol,activo,sucursal_id,pin,pin_hash")\
+            .eq("nombre", nombre)\
+            .eq("activo", True)\
+            .execute()
+    
+        if not res.data:
+            st.error("❌ Usuario no encontrado o inactivo")
+            st.stop()
+    
+        user_data = res.data[0]
+    
+        # 🔒 VALIDAR PIN
+        if not validar_pin(user_data, pin):
+            st.error("❌ PIN incorrecto")
+            st.stop()
+    
+        # 🔥 VALIDAR SUCURSAL
+        if not user_data.get("sucursal_id"):
+            st.error("❌ Usuario sin sucursal asignada")
+            st.stop()
+    
+        # 🔥 VALIDAR QUE EXISTA LA SUCURSAL
+        suc = supabase.table("sucursales")\
+            .select("id,nombre")\
+            .eq("id", user_data["sucursal_id"])\
+            .execute()
+    
+        if not suc.data:
+            st.error("❌ La sucursal asignada no existe")
+            st.stop()
+    
+        # 🔥 GUARDAR SESIÓN LIMPIA
+        st.session_state.user = {
+            "id": user_data["id"],
+            "nombre": user_data["nombre"],
+            "rol": user_data.get("rol", "empleado"),
+            "sucursal_id": str(user_data["sucursal_id"]),  # 🔥 SIEMPRE STRING
+            "sucursal_nombre": suc.data[0]["nombre"]
+        }
+    
+        st.success(f"Bienvenido {user_data['nombre']} - {suc.data[0]['nombre']}")
+        st.rerun()
 
 
 # =========================
