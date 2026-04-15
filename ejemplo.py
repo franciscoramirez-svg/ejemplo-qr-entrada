@@ -582,6 +582,9 @@ def registrar(nombre, tipo):
         if ahora.time() < h_sal:
             est = "SALIDA ANTICIPADA"
 
+response = None  # 🔥 SIEMPRE inicializar
+
+try:
     # 💾 INSERT
     res = supabase.table("registros").insert({
         "empleado": nombre,
@@ -594,18 +597,26 @@ def registrar(nombre, tipo):
         "sucursal_id": user['sucursal_id'],
         "justificacion": ""
     }).execute()
-
-    if response.data:
-        nuevo_id = response.data[0]['id']
     
-        st.session_state.registro_id = nuevo_id  # 🔥 CLAVE
-        st.session_state.registro_ok = True
-        st.session_state.ultimo_movimiento = f"{tipo} registrada"
+except Exception as e:
+    st.error(f"❌ Error al insertar: {e}")
+    return  # 🔥 CORTA EL FLUJO
 
-        if est != "A Tiempo":
-            st.session_state.justificar = True
+if response is not None and hasattr(response, "data") and response.data:
+    
+    nuevo_id = response.data[0]['id']
 
-        st.rerun()
+    st.session_state.registro_id = nuevo_id  # 🔥 CLAVE
+    st.session_state.registro_ok = True
+    st.session_state.ultimo_movimiento = f"{tipo} registrada"
+
+    if est != "A Tiempo":
+        st.session_state.justificar = True
+
+    st.rerun()
+
+else:
+    st.error("❌ No se pudo guardar el registro")
 
 # =========================
 # 🖥️ KIOSCO QR
