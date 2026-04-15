@@ -220,7 +220,7 @@ def enviar_reporte_diario(df_hoy):
     from email import encoders
 
     mensaje = MIMEMultipart()
-    mensaje['Subject'] = f"📊 Reporte Diario de Asistencia - TRV - {hoy_str}"
+    mensaje['Subject'] = f"📊 Reporte Diario de Asistencia - {hoy_str}"
     smtp_user = st.secrets.get("SMTP_USER")
     smtp_pass = st.secrets.get("SMTP_PASSWORD")
     email_to = st.secrets.get("REPORTE_DIARIO_TO")
@@ -331,6 +331,9 @@ def init_state():
             st.session_state[k] = v
 
 init_state()
+
+    if 'registro_reciente' not in st.session_state:
+        st.session_state.registro_reciente = False
 
 # =========================
 # 🔐 LOGIN
@@ -641,10 +644,12 @@ def registrar(nombre, tipo):
         st.session_state.registro_ok = True
         st.session_state.ultimo_movimiento = f"{tipo} registrada"
     
-        if est != "A Tiempo":
+        if est in ["Retardo", "RETARDO CRÍTICO", "SALIDA ANTICIPADA"]:
             st.session_state.justificar = True
+            st.session_state.registro_id = response.data[0]['id']
     
         st.success("✅ Registro guardado correctamente")
+        st.session_state.registro_reciente = True
         st.rerun()
     
     else:
@@ -729,7 +734,7 @@ else:
 # =========================
 # ⚠️ JUSTIFICACIÓN
 # =========================
-if st.session_state.mostrar_justificacion:
+if st.session_state.get("justificar") and st.session_state.get("registro_id"):
 
     st.divider()
     st.warning("⚠️ Se requiere justificación")
@@ -754,21 +759,21 @@ if st.session_state.mostrar_justificacion:
                 "justificacion": motivo
             }).eq("id", registro_id).execute()
     
-            if response.data:
-                st.success("✅ Guardado correctamente")
-    
-                # 🔥 LIMPIEZA CORRECTA
-                st.session_state.justificar = False
-                st.session_state.registro_id = None
-    
-                st.rerun()
+            if response and response.data:
+            
+                st.session_state.registro_id = response.data[0]['id']
+                st.session_state.registro_ok = True
+            
+                if est in ["Retardo", "RETARDO CRÍTICO", "SALIDA ANTICIPADA"]:
+                    st.session_state.justificar = True
+                    st.success("⚠️ Registro guardado, se requiere justificación")
+                else:
+                    st.success("✅ Registro guardado correctamente")
+                    st.rerun()
             else:
                 st.error("❌ No se guardó (ID no existe)")
 
     
-
-
-
 # =========================
 # 📊 DASHBOARD SOLO ADMIN
 # =========================
