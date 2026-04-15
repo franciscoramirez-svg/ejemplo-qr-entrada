@@ -668,7 +668,7 @@ def registrar(nombre, tipo):
 
     response = None  # 🔥 SIEMPRE inicializar
     
-    try:
+
         # 💾 INSERT
         response = supabase.table("registros").insert({
             "empleado": nombre,
