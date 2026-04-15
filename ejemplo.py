@@ -28,6 +28,53 @@ key = st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
 # =========================
+# 🔄 MIGRACIÓN
+# =========================
+def migrar_pines():
+    res = supabase.table("empleados").select("*").execute()
+
+    if not res.data:
+        print("❌ No hay empleados")
+        return
+
+    total = len(res.data)
+    migrados = 0
+
+    for emp in res.data:
+        emp_id = emp["id"]
+        pin = emp.get("pin")
+        pin_hash = emp.get("pin_hash")
+
+        # 👉 Si ya tiene hash, saltar
+        if pin_hash:
+            continue
+
+        # 👉 Si no tiene pin, saltar
+        if not pin:
+            print(f"⚠️ Empleado sin PIN: {emp['nombre']}")
+            continue
+
+        # 🔐 Generar hash
+        hash_generado = hashlib.sha256(str(pin).encode()).hexdigest()
+
+        # 💾 Guardar en Supabase
+        supabase.table("empleados").update({
+            "pin_hash": hash_generado
+        }).eq("id", emp_id).execute()
+
+        print(f"✅ Migrado: {emp['nombre']}")
+        migrados += 1
+
+    print("\n🎯 RESULTADO:")
+    print(f"Total empleados: {total}")
+    print(f"Migrados: {migrados}")
+    print(f"Ya tenían hash: {total - migrados}")
+
+
+# ▶️ Ejecutar
+migrar_pines()
+
+# =========================
 # ⚙️ CONFIG    
 # =========================       
 zona = pytz.timezone('America/Mexico_City')
