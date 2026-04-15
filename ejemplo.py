@@ -19,6 +19,9 @@ import hashlib
 import hmac
 import streamlit.components.v1 as components
 
+from services.supabase_client import get_supabase
+
+supabase = get_supabase()
 
 # =========================
 # 🔄 MIGRACIÓN
