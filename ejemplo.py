@@ -456,7 +456,7 @@ if not st.session_state.user:
     if st.button("Ingresar"):
 
         res = supabase.table("empleados")\
-            .select("id,nombre,rol,activo,sucursal_id,pin,pin_hash")\
+            .select("id,nombre,rol,activo,sucursal_id,pin,pin_hash,hora_entrada,hora_salida")\
             .eq("nombre", nombre)\
             .eq("activo", True)\
             .execute()
@@ -492,8 +492,10 @@ if not st.session_state.user:
             "id": user_data["id"],
             "nombre": user_data["nombre"],
             "rol": user_data.get("rol", "empleado"),
-            "sucursal_id": str(user_data["sucursal_id"]),  # 🔥 SIEMPRE STRING
-            "sucursal_nombre": suc.data[0]["nombre"]
+            "sucursal_id": str(user_data["sucursal_id"]),
+            "sucursal_nombre": suc.data[0]["nombre"],
+            "hora_entrada": user_data.get("hora_entrada"),
+            "hora_salida": user_data.get("hora_salida")
         }
     
         st.success(f"Bienvenido {user_data['nombre']} - {suc.data[0]['nombre']}")
