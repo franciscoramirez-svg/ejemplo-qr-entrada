@@ -668,7 +668,7 @@ def registrar(nombre, tipo):
 
     response = None  # 🔥 SIEMPRE inicializar
     
-
+    try:
         # 💾 INSERT
         response = supabase.table("registros").insert({
             "empleado": nombre,
@@ -706,6 +706,9 @@ def registrar(nombre, tipo):
         
         else:
             st.error("❌ No se pudo guardar el registro")
+            
+    except Exception as e:
+        st.error(f"❌ Error al insertar: {e}")
 # =========================
 # 🖥️ KIOSCO QR
 # =========================
