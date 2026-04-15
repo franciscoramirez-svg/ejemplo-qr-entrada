@@ -345,7 +345,7 @@ if not st.session_state.user:
     <style>
     /* Fondo de la app */
     .stApp {
-        background-color: #f4f7f9;
+        background-color: #e6b5f7;
     }
     
     /* Estilo de los botones principales (Entrada/Salida) */
@@ -455,15 +455,14 @@ if not st.session_state.user:
     
         st.success(f"Bienvenido {user_data['nombre']} - {suc.data[0]['nombre']}")
         st.rerun()
-
+    st.stop()
 
 # =========================
 # 👤 USER
 # =========================
 user = st.session_state.get("user")
 
-if not user:
-    st.error("Sesión inválida")
+if user is None:
     st.stop()
     
 # 🚨 VALIDACIÓN DE SUCURSAL
