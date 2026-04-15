@@ -324,6 +324,7 @@ def init_state():
         "ultima_geo": None,
         "intentos_login": 0,
         "bloqueado_hasta": None
+        "registro_reciente": False
     }
 
     for k, v in defaults.items():
@@ -331,9 +332,6 @@ def init_state():
             st.session_state[k] = v
 
 init_state()
-
-    if 'registro_reciente' not in st.session_state:
-        st.session_state.registro_reciente = False
 
 # =========================
 # 🔐 LOGIN
