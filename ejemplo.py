@@ -784,44 +784,25 @@ else:
 # =========================
 # ⚠️ JUSTIFICACIÓN
 # =========================
-if st.session_state.get("justificar") and st.session_state.get("registro_id"):
+registro_id = st.session_state.get("registro_id_justificar")
 
-    st.divider()
-    st.warning("⚠️ Se requiere justificación")
+st.write(f"DEBUG ID: {registro_id}")
 
-    with st.form("justificacion_form"):
+if not registro_id:
+    st.error("❌ No hay ID para justificar")
+    st.stop()
 
-        motivo = st.text_area("Escribe el motivo:")
-    
-        submitted = st.form_submit_button("Guardar Justificación")
-    
-        if submitted:
-    
-            registro_id = st.session_state.get("registro_id")
-    
-            st.write("DEBUG ID:", registro_id)
-    
-            if not registro_id:
-                st.error("❌ No hay ID válido")
-                st.stop()
-    
-            response = supabase.table("registros").update({
-                "justificacion": motivo
-            }).eq("id", registro_id).execute()
-    
-            if response and response.data:
-            
-                st.session_state.registro_id = response.data[0]['id']
-                st.session_state.registro_ok = True
-            
-                if est in ["Retardo", "RETARDO CRÍTICO", "SALIDA ANTICIPADA"]:
-                    st.session_state.justificar = True
-                    st.success("⚠️ Registro guardado, se requiere justificación")
-                else:
-                    st.success("✅ Registro guardado correctamente")
-                    st.rerun()
-            else:
-                st.error("❌ No se guardó (ID no existe)")
+res = supabase.table("registros").update({
+    "justificacion": motivo
+}).eq("id", registro_id).execute()
+
+if res.data:
+    st.success("✅ Justificación guardada")
+    st.session_state.mostrar_justificacion = False
+    st.session_state.registro_id_justificar = None
+    st.rerun()
+else:
+    st.error("❌ No se guardó (ID no existe)")
 
     
 # =========================
