@@ -682,28 +682,30 @@ def registrar(nombre, tipo):
             "justificacion": "",
             "horas_extra": False
         }).execute()
+        
+        # 🔥 DEBUG
+        st.write("RESPONSE:", response)
     
-    except Exception as e:
-        st.error(f"❌ Error real al insertar: {e}")
-        return
-    
-    # ✅ VALIDACIÓN REAL
-    if response and response.data and len(response.data) > 0:
-    
-        st.session_state.registro_id = response.data[0]['id']
-        st.session_state.registro_ok = True
-        st.session_state.ultimo_movimiento = f"{tipo} registrada"
-    
-        if est in ["Retardo", "RETARDO CRÍTICO", "SALIDA ANTICIPADA"]:
-            st.session_state.justificar = True
-            st.session_state.registro_id = response.data[0]['id']
-    
-        st.success("✅ Registro guardado correctamente")
-        st.session_state.registro_reciente = True
-        st.rerun()
-    
-    else:
-        st.error("❌ Supabase no devolvió datos (raro)")
+        if response.data and len(response.data) > 0:
+            nuevo_id = response.data[0]["id"]
+        
+            # 🔥 GUARDAR ID CORRECTO
+            st.session_state.registro_id_actual = nuevo_id
+            st.session_state.registro_id_justificar = nuevo_id
+        
+            st.write("ID GUARDADO:", nuevo_id)  # 👈 DEBUG
+        
+            st.session_state.registro_ok = True
+            st.session_state.ultimo_movimiento = f"{tipo} registrada"
+        
+            # 🔥 ACTIVAR JUSTIFICACIÓN SI APLICA
+            if est != "A Tiempo":
+                st.session_state.mostrar_justificacion = True
+        
+            st.rerun()
+        
+        else:
+            st.error("❌ No se pudo guardar el registro")
 # =========================
 # 🖥️ KIOSCO QR
 # =========================
