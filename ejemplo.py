@@ -582,41 +582,41 @@ def registrar(nombre, tipo):
         if ahora.time() < h_sal:
             est = "SALIDA ANTICIPADA"
 
-response = None  # 🔥 SIEMPRE inicializar
-
-try:
-    # 💾 INSERT
-    res = supabase.table("registros").insert({
-        "empleado": nombre,
-        "fecha_hora": ahora.isoformat(),
-        "lat": lat,
-        "lon": lon,
-        "tipo": tipo,
-        "estatus": est,
-        "min_retardo": min_r,
-        "sucursal_id": user['sucursal_id'],
-        "justificacion": ""
-    }).execute()
+    response = None  # 🔥 SIEMPRE inicializar
     
-except Exception as e:
-    st.error(f"❌ Error al insertar: {e}")
-    return  # 🔥 CORTA EL FLUJO
-
-if response is not None and hasattr(response, "data") and response.data:
+    try:
+        # 💾 INSERT
+        res = supabase.table("registros").insert({
+            "empleado": nombre,
+            "fecha_hora": ahora.isoformat(),
+            "lat": lat,
+            "lon": lon,
+            "tipo": tipo,
+            "estatus": est,
+            "min_retardo": min_r,
+            "sucursal_id": user['sucursal_id'],
+            "justificacion": ""
+        }).execute()
+        
+    except Exception as e:
+        st.error(f"❌ Error al insertar: {e}")
+        return  # 🔥 CORTA EL FLUJO
     
-    nuevo_id = response.data[0]['id']
-
-    st.session_state.registro_id = nuevo_id  # 🔥 CLAVE
-    st.session_state.registro_ok = True
-    st.session_state.ultimo_movimiento = f"{tipo} registrada"
-
-    if est != "A Tiempo":
-        st.session_state.justificar = True
-
-    st.rerun()
-
-else:
-    st.error("❌ No se pudo guardar el registro")
+    if response is not None and hasattr(response, "data") and response.data:
+        
+        nuevo_id = response.data[0]['id']
+    
+        st.session_state.registro_id = nuevo_id  # 🔥 CLAVE
+        st.session_state.registro_ok = True
+        st.session_state.ultimo_movimiento = f"{tipo} registrada"
+    
+        if est != "A Tiempo":
+            st.session_state.justificar = True
+    
+        st.rerun()
+    
+    else:
+        st.error("❌ No se pudo guardar el registro")
 
 # =========================
 # 🖥️ KIOSCO QR
