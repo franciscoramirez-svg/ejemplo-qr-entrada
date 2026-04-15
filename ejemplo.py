@@ -481,7 +481,7 @@ except Exception:
 if user.get("rol") in ROLES_ADMIN:
     st.session_state.registro_ok = False
 
-st.title("🏢 NEOMOTIC Access PRO")
+st.title("🏢 neoAccess PRO")
 st.success(f"👤 {user['nombre']} | {user.get('rol','empleado')}")
 
 # =========================
@@ -630,18 +630,25 @@ def registrar(nombre, tipo):
             "horas_extra": False
         }).execute()
     
-        # 🔥 DEBUG REAL
-        st.write("🔍 RESPONSE COMPLETO:", response)
-    
-        if hasattr(response, "data"):
-            st.write("📦 DATA:", response.data)
-    
-        if hasattr(response, "error"):
-            st.write("🚨 ERROR:", response.error)
-    
     except Exception as e:
-        st.error(f"💥 EXCEPCIÓN REAL: {e}")
-        st.stop()
+        st.error(f"❌ Error real al insertar: {e}")
+        return
+    
+    # ✅ VALIDACIÓN REAL
+    if response and response.data and len(response.data) > 0:
+    
+        st.session_state.registro_id = response.data[0]['id']
+        st.session_state.registro_ok = True
+        st.session_state.ultimo_movimiento = f"{tipo} registrada"
+    
+        if est != "A Tiempo":
+            st.session_state.justificar = True
+    
+        st.success("✅ Registro guardado correctamente")
+        st.rerun()
+    
+    else:
+        st.error("❌ Supabase no devolvió datos (raro)")
 # =========================
 # 🖥️ KIOSCO QR
 # =========================
