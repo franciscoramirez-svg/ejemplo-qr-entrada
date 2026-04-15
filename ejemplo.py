@@ -557,7 +557,6 @@ if user.get("rol") in ROLES_KIOSCO:
 # 🧠 VALIDACIONES
 # =========================
 def validar_flujo(nombre, tipo):
-
     df = obtener_registros()
 
     if df.empty:
@@ -566,34 +565,39 @@ def validar_flujo(nombre, tipo):
     df['fecha_hora'] = pd.to_datetime(df['fecha_hora'], errors='coerce')
     df = df.dropna(subset=['fecha_hora'])
 
-    hoy = datetime.now(zona_usuario).date()
-    ayer = hoy - timedelta(days=1)
+    emp = df[df['empleado'] == nombre]
 
-    foto = st.camera_input("📷 Rostro")
+    if emp.empty:
+        return True, ""
 
-    if foto:
-        nombre = reconocer_rostro(foto)
-    
-        if nombre:
-            registrar(nombre, "Entrada")
+    ultimo = emp.sort_values('fecha_hora').iloc[-1]
+    ultimo_tipo = ultimo['tipo']
 
-    if tipo == "Salida":
-        hoy_regs = df[(df['empleado'] == nombre) & (df['fecha_hora'].dt.date == hoy)]
-        if not any(hoy_regs['tipo'] == "Entrada"):
-            return False, "⚠️ No puedes registrar SALIDA sin ENTRADA"
-
+    # =========================
+    # ENTRADA
+    # =========================
     if tipo == "Entrada":
-        ayer_regs = df[(df['empleado'] == nombre) & (df['fecha_hora'].dt.date == ayer)]
 
-        if any(ayer_regs['tipo'] == "Entrada") and not any(ayer_regs['tipo'] == "Salida"):
-            # 🔥 Obtener el registro de ayer SIN salida
-            reg_ayer = ayer_regs[ayer_regs['tipo'] == "Entrada"].iloc[-1]
-        
-            st.session_state.justificar = True
-            st.session_state.registro_id = reg_ayer['id']  # 🔥 AQUÍ LA CLAVE
-            st.session_state.requiere_registro_post_justificacion = True
-        
-            return True, "⚠️ Falta salida de ayer, se requerirá justificación"
+        if ultimo_tipo == "Entrada":
+            # ⚠️ NO cerró turno anterior
+            st.session_state.mostrar_justificacion = True
+            st.session_state.registro_id_justificar = ultimo['id']
+            return False, "⚠️ Debes justificar salida faltante"
+
+        return True, ""
+
+    # =========================
+    # SALIDA
+    # =========================
+    if tipo == "Salida":
+
+        if ultimo_tipo == "Salida":
+            return False, "⚠️ Ya registraste salida"
+
+        if ultimo_tipo != "Entrada":
+            return False, "⚠️ No puedes salir sin entrar"
+
+        return True, ""
 
     return True, ""
 
