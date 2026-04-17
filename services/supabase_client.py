@@ -1,8 +1,11 @@
-from supabase import create_client
-import streamlit as st
+from __future__ import annotations
 
-@st.cache_resource
-def get_supabase():
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_KEY"]
-    return create_client(url, key)
+import os
+
+
+def get_supabase_settings() -> dict:
+    return {
+        "url": os.getenv("SUPABASE_URL", ""),
+        "anon_key": os.getenv("SUPABASE_ANON_KEY", ""),
+        "configured": bool(os.getenv("SUPABASE_URL") and os.getenv("SUPABASE_ANON_KEY")),
+    }
