@@ -11,3 +11,7 @@ supabase
 openpyxl
 streamlit-geolocation
 plotly
+face-recognition
+cmake
+dlib
+

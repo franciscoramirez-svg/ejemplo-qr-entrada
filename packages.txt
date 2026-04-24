@@ -1,2 +1,8 @@
 libgl1
+build-essential
+cmake
+libopenblas-dev
+liblapack-dev
+libx11-dev
+libgtk-3-dev
 
