@@ -113,6 +113,8 @@ def validar_flujo(nombre, tipo):
 
     emp = df[df["empleado"] == nombre]
     if emp.empty:
+        if tipo == "Salida":
+            return False, "⚠️ No puedes salir sin entrar"
         return True, ""
 
     ultimo_tipo = emp.sort_values("fecha_hora").iloc[-1]["tipo"]

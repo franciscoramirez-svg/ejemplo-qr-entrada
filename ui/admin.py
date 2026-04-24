@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import pydeck as pdk
 from datetime import datetime, timedelta
 from core.reporting import exportar_excel, enviar_reporte_diario, normalizar_resultado_envio
 from services.data import enriquecer_con_nombre_sucursal, obtener_sucursales_catalogo, obtener_empleados, obtener_registros
@@ -44,7 +45,11 @@ def _style_admin():
 def _calculate_employee_of_month(df):
     if df.empty:
         return None
-    window = datetime.now(ZONA) - timedelta(days=30)
+    df = df.copy()
+    df["fecha_hora"] = pd.to_datetime(df["fecha_hora"], errors="coerce")
+    if df["fecha_hora"].dt.tz is not None:
+        df["fecha_hora"] = df["fecha_hora"].dt.tz_convert(None)
+    window = pd.Timestamp(datetime.now(ZONA)).tz_localize(None) - timedelta(days=30)
     df = df[df["fecha_hora"] >= window]
     if df.empty:
         return None
@@ -111,6 +116,82 @@ def render_admin_dashboard(zona_usuario):
             unsafe_allow_html=True,
         )
 
+    st.subheader("🗺️ Mapa de sucursales y registros")
+    sucursales = obtener_sucursales_catalogo()
+    registros_gps = pd.DataFrame()
+    if {"lat", "lon"}.issubset(df.columns):
+        registros_gps = df.dropna(subset=["lat", "lon"]).copy()
+        registros_gps["tipo_marca"] = "Registro"
+
+    sucursales_gps = pd.DataFrame()
+    if not sucursales.empty and {"lat", "lon"}.issubset(sucursales.columns):
+        sucursales_gps = sucursales.dropna(subset=["lat", "lon"]).copy()
+        if not sucursales_gps.empty:
+            sucursales_gps["tipo_marca"] = "Sucursal"
+            sucursales_gps = sucursales_gps.rename(columns={"nombre": "empleado"})
+
+    if not registros_gps.empty or not sucursales_gps.empty:
+        mapa_df = pd.concat([registros_gps, sucursales_gps], ignore_index=True, sort=False)
+        if {"lat", "lon", "tipo_marca"}.issubset(mapa_df.columns) and not mapa_df.empty:
+            mapa_df["lat"] = mapa_df["lat"].astype(float)
+            mapa_df["lon"] = mapa_df["lon"].astype(float)
+            registros_layer = None
+            sucursales_layer = None
+
+            if not registros_gps.empty:
+                registros_gps["lat"] = registros_gps["lat"].astype(float)
+                registros_gps["lon"] = registros_gps["lon"].astype(float)
+                registros_layer = pdk.Layer(
+                    "ScatterplotLayer",
+                    data=registros_gps,
+                    get_position=["lon", "lat"],
+                    get_fill_color=[0, 122, 255, 180],
+                    get_radius=120,
+                    radius_scale=8,
+                    radius_min_pixels=4,
+                    radius_max_pixels=18,
+                    pickable=True,
+                )
+
+            if not sucursales_gps.empty:
+                sucursales_gps["lat"] = sucursales_gps["lat"].astype(float)
+                sucursales_gps["lon"] = sucursales_gps["lon"].astype(float)
+                sucursales_layer = pdk.Layer(
+                    "ScatterplotLayer",
+                    data=sucursales_gps,
+                    get_position=["lon", "lat"],
+                    get_fill_color=[220, 20, 60, 200],
+                    get_radius=180,
+                    radius_scale=10,
+                    radius_min_pixels=6,
+                    radius_max_pixels=22,
+                    pickable=True,
+                )
+
+            avg_lat = mapa_df["lat"].mean()
+            avg_lon = mapa_df["lon"].mean()
+            layers = [layer for layer in (registros_layer, sucursales_layer) if layer is not None]
+            deck = pdk.Deck(
+                initial_view_state=pdk.ViewState(
+                    latitude=avg_lat,
+                    longitude=avg_lon,
+                    zoom=10,
+                    pitch=0,
+                ),
+                layers=layers,
+                tooltip={"text": "{empleado}\n{tipo_marca}"},
+            )
+            st.pydeck_chart(deck)
+        elif not registros_gps.empty:
+            st.map(registros_gps[["lat", "lon"]])
+        elif not sucursales_gps.empty:
+            st.map(sucursales_gps[["lat", "lon"]])
+        else:
+            st.info("No hay ubicaciones GPS disponibles para mostrar en el mapa.")
+    else:
+        st.info("No hay ubicaciones GPS disponibles hoy.")
+
+
     st.subheader("📈 Tendencias")
     col1, col2 = st.columns(2)
     fig1 = px.bar(
@@ -129,19 +210,6 @@ def render_admin_dashboard(zona_usuario):
     )
     col2.plotly_chart(fig2, use_container_width=True)
 
-    st.subheader("🗺️ Ubicaciones de registro")
-    pts = hoy.dropna(subset=["lat", "lon"])
-    if not pts.empty:
-        st.map(pts[["lat", "lon"]])
-    else:
-        st.info("No hay coordenadas registradas para hoy.")
-
-    st.subheader("🚨 Faltantes y avisos")
-    if faltantes:
-        for nombre in faltantes[:10]:
-            st.error(nombre)
-    else:
-        st.success("Todos los empleados registrados hoy están presentes.")
 
     st.subheader("🧾 Controles administrativos")
     if st.button("📧 Enviar reporte diario"):
@@ -192,3 +260,50 @@ def render_admin_dashboard(zona_usuario):
         img_bytes.seek(0)
         st.image(img_bytes, caption=f"QR de {emp_sel}")
         st.download_button("⬇️ Descargar QR individual", img_bytes.getvalue(), file_name=f"{emp_sel}.png", mime="image/png")
+
+def render_biometria_admin():
+    from core.biometria import guardar_foto_empleado, FACE_RECOGNITION_AVAILABLE
+    
+    st.markdown("---")
+    st.subheader("📸 Gestión de Identidad Biométrica")
+    
+    if not FACE_RECOGNITION_AVAILABLE:
+        st.warning("📦 La librería de reconocimiento facial no está lista en este entorno.")
+        return
+
+    st.markdown("""
+    <div class='stat-card'>
+        <p class='small-note'>Utilice esta sección para capturar el rostro oficial de los empleados. 
+        Asegúrese de que el rostro esté bien iluminado y sin accesorios que lo cubran.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # 1. Obtener empleados para seleccionar
+    empleados = obtener_empleados()
+    nombres_ids = {e['nombre']: e['id'] for e in empleados if e.get('nombre')}
+    
+    col_sel, col_info = st.columns([1, 1])
+    with col_sel:
+        emp_nombre = st.selectbox("Seleccione Empleado para enrolar", list(nombres_ids.keys()), key="sel_bio_admin")
+    
+    emp_id = nombres_ids[emp_nombre]
+
+    # 2. Captura de Cámara
+    foto_captura = st.camera_input(f"Capturar rostro oficial: {emp_nombre}", key="cam_enrol_admin")
+
+    if foto_captura:
+        st.image(foto_captura, caption="Previsualización de captura", width=300)
+        
+        if st.button(f"⭐ Guardar Biometría de {emp_nombre}", type="primary", use_container_width=True):
+            with st.spinner("Generando codificación facial y guardando en base de datos..."):
+                # Llamamos a tu función de core/biometria.py
+                exito, mensaje = guardar_foto_empleado(emp_id, emp_nombre, foto_captura.getvalue())
+                
+                if exito:
+                    st.success(f"✅ {mensaje}")
+                    st.balloons()
+                else:
+                    st.error(f"❌ {mensaje}")
+
+# No olvides llamar a esta función al final de tu render_admin_dashboard(zona_usuario):
+# render_biometria_admin()

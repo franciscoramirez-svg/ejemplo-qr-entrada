@@ -14,7 +14,10 @@ def obtener_empleados():
 
 
 def obtener_sucursales_catalogo():
-    data = supabase.table("sucursales").select("id,nombre").execute().data or []
+    try:
+        data = supabase.table("sucursales").select("id,nombre,lat,lon").execute().data or []
+    except Exception:
+        data = supabase.table("sucursales").select("id,nombre").execute().data or []
     df = pd.DataFrame(data)
     if df.empty:
         return df
