@@ -1,4 +1,5 @@
 face-recognition
+face-recognition-models
 streamlit
 pandas
 opencv-python-headless
