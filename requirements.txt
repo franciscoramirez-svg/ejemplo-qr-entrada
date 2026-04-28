@@ -8,3 +8,4 @@ pytz
 qrcode
 pillow
 xlsxwriter
+opencode github
